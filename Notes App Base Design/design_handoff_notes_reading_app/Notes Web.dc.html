@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<script src="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/_ds_bundle.js"></script>
+<style>:root{--font-heading:"Source Serif 4","Noto Serif JP",serif;--font-body:"Source Serif 4","Noto Serif JP",serif}html,body{margin:0;height:100%}body{background:var(--color-bg);font-family:var(--font-body)}a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}</style>
+</helmet>
+<div style="height:100vh;min-height:640px;min-width:1080px;display:grid;grid-template-columns:76px 340px minmax(0,1fr);background:var(--color-bg);color:var(--color-text);overflow:hidden;position:relative">
+
+<nav style="background:var(--color-surface);padding:22px 0 18px;display:flex;flex-direction:column;align-items:center;gap:6px">
+<div style="font-size:24px;font-weight:600;letter-spacing:-0.02em;margin-bottom:18px">N</div>
+<sc-for list="{{ rail }}" as="r" hint-placeholder-count="3">
+<button onClick="{{ r.onClick }}" style="width:60px;padding:8px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;border-radius:2px;cursor:pointer;font:inherit;font-size:10px;background:{{ r.bg }};color:{{ r.fg }}" style-hover="background:var(--color-neutral-300)"><i class="{{ r.icon }}" style="font-size:24px"></i>{{ r.label }}</button>
+</sc-for>
+<div style="flex:1"></div>
+<button onClick="{{ openPalette }}" title="検索・追加 ⌘K" style="width:60px;padding:8px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;border-radius:2px;cursor:pointer;font:inherit;font-size:10px;background:transparent;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-300)"><i class="ph-duotone ph-magnifying-glass" style="font-size:24px"></i>探す</button>
+<button onClick="{{ railSettings.onClick }}" style="width:60px;padding:8px 0 6px;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;border-radius:2px;cursor:pointer;font:inherit;font-size:10px;background:{{ railSettings.bg }};color:{{ railSettings.fg }}" style-hover="background:var(--color-neutral-300)"><i class="ph-duotone ph-gear" style="font-size:24px"></i>設定</button>
+</nav>
+
+<aside style="background:var(--color-neutral-100);padding:28px 18px;display:grid;grid-auto-rows:max-content;align-content:start;gap:20px;overflow-y:auto;min-height:0">
+
+<sc-if value="{{ isLib }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0 6px"><span style="font-size:24px;font-weight:600">本棚</span><button onClick="{{ openPalette }}" style="border:0;cursor:pointer;font:inherit;font-size:11px;color:var(--color-neutral-800);background:var(--color-neutral-200);padding:3px 8px;border-radius:2px" style-hover="background:var(--color-neutral-300)">⌘K 検索・追加</button></div>
+<div class="seg" style="display:flex"><sc-for list="{{ filters }}" as="o" hint-placeholder-count="4"><span class="seg-opt" onClick="{{ o.onClick }}" style="flex:1;justify-content:center;padding:7px 4px;font-size:12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ listBooks }}" as="b" hint-placeholder-count="5">
+<div onClick="{{ b.onClick }}" style="display:flex;gap:12px;padding:9px 8px;border-radius:2px;cursor:pointer;background:{{ b.bg }}" style-hover="background:var(--color-neutral-200)"><div style="width:36px;height:52px;flex:none;border-radius:1px;box-shadow:var(--shadow-sm);background:{{ b.cbg }}"></div><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:14px;font-weight:600;line-height:1.35">{{ b.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ b.meta }}</span></div></div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ isNotes }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0 6px"><span style="font-size:24px;font-weight:600">メモ・引用</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ noteTotal }}件</span></div>
+<div class="seg" style="display:flex"><sc-for list="{{ noteFilters }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="flex:1;justify-content:center;font-size:12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ notesList }}" as="n" hint-placeholder-count="5">
+<div onClick="{{ n.onClick }}" style="display:flex;flex-direction:column;gap:4px;padding:12px 10px;border-radius:2px;cursor:pointer;background:{{ n.bg }}" style-hover="background:var(--color-neutral-200)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kindLabel }}</span>
+<sc-if value="{{ n.isQuote }}" hint-placeholder-val="{{ true }}"><span style="font-size:14px;line-height:1.65;font-style:{{ n.fs }}">「{{ n.excerpt }}」</span></sc-if>
+<sc-if value="{{ n.isMemo }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;line-height:1.65">{{ n.excerpt }}</span></sc-if>
+<span style="font-size:11px;color:var(--color-neutral-700)">{{ n.src }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:24px;font-weight:600;padding:0 6px">振り返り</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ periodItems }}" as="p" hint-placeholder-count="5">
+<div onClick="{{ p.onClick }}" style="display:flex;justify-content:space-between;align-items:baseline;padding:12px 10px;border-radius:2px;cursor:pointer;background:{{ p.bg }}" style-hover="background:var(--color-neutral-200)"><div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:16px;font-weight:600">{{ p.label }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ p.sub }}</span></div><span style="font-size:13px;color:var(--color-neutral-800)">{{ p.count }}</span></div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:24px;font-weight:600;padding:0 6px">設定</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ secItems }}" as="x" hint-placeholder-count="4">
+<div onClick="{{ x.onClick }}" style="display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:2px;cursor:pointer;font-size:15px;background:{{ x.bg }};color:{{ x.fg }}" style-hover="background:var(--color-neutral-200)"><i class="{{ x.icon }}" style="font-size:20px"></i>{{ x.label }}</div>
+</sc-for>
+</div>
+</sc-if>
+</aside>
+
+<main style="overflow-y:auto;min-height:0">
+<div style="max-width:760px;padding:48px 64px 80px;display:flex;flex-direction:column;gap:36px">
+
+<sc-if value="{{ isLib }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:28px;align-items:flex-end">
+<div style="width:120px;height:176px;flex:none;border-radius:2px;box-shadow:var(--shadow-md);padding:12px;display:flex;flex-direction:column;justify-content:space-between;background:{{ sel.cbg }};color:{{ sel.cfg }}"><span style="font-size:14px;font-weight:600;line-height:1.3">{{ sel.t }}</span><span style="font-size:10px">{{ sel.a }}</span></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">
+<span class="{{ sel.tagCls }}" style="align-self:flex-start">{{ sel.statusLabel }}</span>
+<div style="font-size:32px;font-weight:600;line-height:1.2;text-wrap:pretty">{{ sel.t }}</div>
+<div style="font-size:13px;color:var(--color-neutral-700)">{{ sel.a }} · {{ sel.pub }}</div>
+<sc-if value="{{ sel.isDone }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:3px;font-size:20px"><sc-for list="{{ sel.stars }}" as="st" hint-placeholder-count="5"><i class="ph-duotone ph-star" onClick="{{ st.onClick }}" style="cursor:pointer;color:{{ st.c }}"></i></sc-for></div></sc-if>
+</div>
+</div>
+
+<sc-if value="{{ sel.isReading }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:520px">
+<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-700)"><span>{{ sel.pageLine }}</span><span>{{ sel.since }} · {{ sel.pct }}</span></div>
+<div style="height:3px;background:var(--color-neutral-300);border-radius:2px"><div style="height:100%;background:var(--color-accent);border-radius:2px;width:{{ sel.pct }}"></div></div>
+</div>
+<div style="display:flex;gap:10px"><button class="btn btn-primary" onClick="{{ startWrite }}"><i class="ph-duotone ph-pencil-simple-line" style="font-size:17px"></i>メモを書く</button><button class="btn btn-secondary" onClick="{{ startProg }}">進捗を記録</button><button class="btn btn-secondary" onClick="{{ openWrite }}"><i class="ph-duotone ph-article" style="font-size:17px"></i>レポートを書く</button></div>
+</sc-if>
+<sc-if value="{{ sel.isTsundoku }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:10px"><button class="btn btn-primary" onClick="{{ startReading }}"><i class="ph-duotone ph-book-open" style="font-size:17px"></i>読み始める</button></div>
+</sc-if>
+<sc-if value="{{ sel.isDone }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:10px"><button class="btn btn-primary" onClick="{{ openWrite }}"><i class="ph-duotone ph-article" style="font-size:17px"></i>レポートを書く</button><button class="btn btn-secondary" onClick="{{ startWrite }}"><i class="ph-duotone ph-pencil-simple-line" style="font-size:17px"></i>メモを追加</button></div>
+</sc-if>
+
+<sc-if value="{{ editProg }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:12px;align-items:flex-end;background:var(--color-surface);padding:18px 20px;border-radius:2px">
+<div class="field" style="width:140px"><label>読んだページ</label><input class="input" type="number" value="{{ dProg }}" onChange="{{ onProg }}" autoFocus="{{ true }}"></div>
+<span style="font-size:13px;color:var(--color-neutral-700);padding-bottom:9px">/ {{ sel.total }}</span>
+<div style="flex:1"></div>
+<button class="btn btn-ghost" onClick="{{ cancelEdit }}">キャンセル</button><button class="btn btn-primary" onClick="{{ saveProg }}">更新</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ composing }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px;background:var(--color-surface);padding:22px 22px 18px;border-radius:2px">
+<div style="display:flex;gap:14px;align-items:flex-end">
+<div class="seg"><sc-for list="{{ kindOpts }}" as="o" hint-placeholder-count="2"><span class="seg-opt" onClick="{{ o.onClick }}" style="background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<div class="field" style="width:110px"><label>ページ</label><input class="input" type="number" value="{{ dPage }}" onChange="{{ onPage }}"></div>
+</div>
+<div class="field"><label>{{ dLabel }}</label><textarea class="input" value="{{ dText }}" onChange="{{ onText }}" autoFocus="{{ true }}" placeholder="{{ dPlaceholder }}" style="min-height:96px;font-size:16px;line-height:1.7;font-style:{{ dFs }}"></textarea></div>
+<sc-if value="{{ isQuoteDraft }}" hint-placeholder-val="{{ true }}"><div class="field"><label>自分のメモ（任意）</label><input class="input" value="{{ dMemo }}" onChange="{{ onMemo }}" placeholder="なぜ残したいか"></div></sc-if>
+<div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn btn-ghost" onClick="{{ cancelEdit }}">キャンセル</button><button class="btn btn-primary" onClick="{{ saveNote }}" disabled="{{ cantSave }}">保存</button></div>
+</div>
+</sc-if>
+
+<div style="display:flex;flex-direction:column;gap:26px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:22px;font-weight:600">メモ・引用 {{ sel.noteCount }}件</span><span style="font-size:12px;color:var(--color-neutral-700)">ページ順</span></div>
+<sc-for list="{{ sel.notes }}" as="n" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:5px;max-width:620px">
+<span style="font-size:12px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kindLabel }}</span>
+<sc-if value="{{ n.isQuote }}" hint-placeholder-val="{{ true }}"><span style="font-size:18px;line-height:1.75;font-style:{{ n.fs }}">「{{ n.text }}」</span></sc-if>
+<sc-if value="{{ n.isMemo }}" hint-placeholder-val="{{ false }}"><span style="font-size:16px;line-height:1.75">{{ n.text }}</span></sc-if>
+<sc-if value="{{ n.hasMemo }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;line-height:1.7;color:var(--color-neutral-800)">{{ n.memo }}</span></sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ sel.noNotes }}" hint-placeholder-val="{{ false }}"><p style="margin:0;font-size:15px;line-height:1.75;color:var(--color-neutral-700);max-width:440px">まだ記録がありません。読んだページの引用や、そのとき考えたことを残せます。</p></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isNotes }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:14px;align-items:center;cursor:pointer" onClick="{{ selN.open }}"><div style="width:36px;height:52px;border-radius:1px;box-shadow:var(--shadow-sm);background:{{ selN.cbg }}"></div><div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:15px;font-weight:600">{{ selN.bookT }}</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ selN.bookA }}</span></div><span style="margin-left:auto;font-size:13px;color:var(--color-accent-700);display:flex;align-items:center;gap:4px">本を開く<i class="ph-duotone ph-arrow-right"></i></span></div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:13px;letter-spacing:0.04em;color:{{ selN.kc }}">{{ selN.kindLabel }} · {{ selN.date }}</span>
+<sc-if value="{{ selN.isQuote }}" hint-placeholder-val="{{ true }}"><div style="font-size:28px;line-height:1.6;text-wrap:pretty;font-style:{{ selN.fs }}">「{{ selN.text }}」</div></sc-if>
+<sc-if value="{{ selN.isMemo }}" hint-placeholder-val="{{ false }}"><div style="font-size:22px;line-height:1.7;text-wrap:pretty">{{ selN.text }}</div></sc-if>
+<sc-if value="{{ selN.hasMemo }}" hint-placeholder-val="{{ false }}"><p style="margin:6px 0 0;font-size:16px;line-height:1.75;color:var(--color-neutral-800)">{{ selN.memo }}</p></sc-if>
+</div>
+<sc-if value="{{ selN.hasSiblings }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:18px;margin-top:20px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">同じ本の記録</div>
+<sc-for list="{{ selN.siblings }}" as="n" hint-placeholder-count="2">
+<div onClick="{{ n.onClick }}" style="display:flex;flex-direction:column;gap:4px;cursor:pointer;max-width:560px" style-hover="color:var(--color-accent-700)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kindLabel }}</span>
+<span style="font-size:15px;line-height:1.7;font-style:{{ n.fs2 }}">{{ n.display }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">{{ rv.sub }}</span><span style="font-size:32px;font-weight:600;line-height:1.15">{{ rv.label }}</span></div>
+<div style="display:flex;align-items:flex-end;gap:18px">
+<div class="cmyk-num" style="font-size:150px;font-weight:600"><span class="paper">{{ rv.count }}</span><span class="plate plate-c" aria-hidden="true">{{ rv.count }}</span><span class="plate plate-m" aria-hidden="true">{{ rv.count }}</span><span class="plate plate-y" aria-hidden="true">{{ rv.count }}</span></div>
+<div style="padding-bottom:14px;display:flex;flex-direction:column;gap:3px"><span style="font-size:22px;font-weight:600">冊 読了</span><span style="font-size:13px;color:var(--color-neutral-700)">{{ rv.goalLine }}</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">{{ rv.barTitle }}</div>
+<div style="display:flex;align-items:flex-end;gap:10px;height:120px">
+<sc-for list="{{ rv.bars }}" as="br" hint-placeholder-count="9"><div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:6px"><div style="border-radius:1px;height:{{ br.h }};background:{{ br.bg }}"></div></div></sc-for>
+</div>
+<div style="display:flex;gap:10px"><sc-for list="{{ rv.bars }}" as="br" hint-placeholder-count="9"><span style="flex:1;text-align:center;font-size:10px;color:var(--color-neutral-700)">{{ br.label }}</span></sc-for></div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+<div><div style="font-size:28px;font-weight:600">{{ rv.pages }}</div><div style="font-size:12px;color:var(--color-neutral-700)">ページ</div></div>
+<div><div style="font-size:28px;font-weight:600">{{ rv.notes }}</div><div style="font-size:12px;color:var(--color-neutral-700)">メモ・引用</div></div>
+<div><div style="font-size:28px;font-weight:600">{{ rv.genre }}</div><div style="font-size:12px;color:var(--color-neutral-700)">よく読む分野</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;max-width:600px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-2-700)">いちばん残した言葉</div>
+<div style="font-size:22px;line-height:1.65;font-style:{{ quoteFs }}">「{{ rv.quote }}」</div>
+<div style="font-size:12px;color:var(--color-neutral-700)">{{ rv.src }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">この期間に読み終えた本</div>
+<div style="display:flex;gap:16px;flex-wrap:wrap">
+<sc-for list="{{ rv.finished }}" as="f" hint-placeholder-count="5"><div style="width:72px;display:flex;flex-direction:column;gap:6px"><div style="height:104px;border-radius:2px;box-shadow:var(--shadow-sm);padding:6px;font-size:10px;font-weight:600;line-height:1.3;background:{{ f.cbg }};color:{{ f.cfg }}">{{ f.t }}</div></div></sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{ secGoal }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:32px;font-weight:600">読書目標</div>
+<div class="field" style="max-width:200px"><label>今年の読了目標（冊）</label><input class="input" type="number" value="{{ goal }}" onChange="{{ onGoal }}" style="font-size:18px"></div>
+<p style="margin:0;font-size:15px;line-height:1.75;color:var(--color-neutral-800)">{{ goalLine }}</p>
+</sc-if>
+<sc-if value="{{ secDisplay }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:32px;font-weight:600">表示</div>
+<div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:var(--color-neutral-700)">本棚の並び順</span><div class="seg" style="align-self:flex-start"><sc-for list="{{ sortOpts }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:var(--color-neutral-700)">引用の書体</span><div class="seg" style="align-self:flex-start"><sc-for list="{{ quoteOpts }}" as="o" hint-placeholder-count="2"><span class="seg-opt" onClick="{{ o.onClick }}" style="background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div></div>
+<div style="font-size:20px;line-height:1.7;max-width:520px;font-style:{{ quoteFs }}">「退屈と向き合うことは、自分の生活を取り戻すことでもある。」</div>
+</sc-if>
+<sc-if value="{{ secData }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:32px;font-weight:600">データ</div>
+<p style="margin:0;font-size:15px;line-height:1.75;color:var(--color-neutral-800)">本 {{ bookTotal }}冊とメモ・引用 {{ noteTotal }}件を書き出せます。</p>
+<div style="display:flex;gap:10px"><button class="btn btn-secondary" onClick="{{ exportMd }}"><i class="ph-duotone ph-file-text" style="font-size:17px"></i>Markdown</button><button class="btn btn-secondary" onClick="{{ exportCsv }}"><i class="ph-duotone ph-file-csv" style="font-size:17px"></i>CSV</button></div>
+</sc-if>
+<sc-if value="{{ secAccount }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:32px;font-weight:600">アカウント</div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:var(--color-neutral-700)">名前</span><span style="font-size:17px">読書 太郎</span></div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:var(--color-neutral-700)">メールアドレス</span><span style="font-size:17px">reader@example.com</span></div>
+<div><button class="btn btn-secondary">ログアウト</button></div>
+</sc-if>
+</sc-if>
+
+</div>
+</main>
+
+<sc-if value="{{ writing }}" hint-placeholder-val="{{ false }}">
+<div ref="{{ wrRef }}" style="position:absolute;inset:0;z-index:8;background:var(--color-bg);display:grid;grid-template-columns:260px minmax(0,1fr)">
+<div style="padding:28px 20px;display:grid;grid-auto-rows:max-content;gap:22px;background:var(--color-neutral-100);overflow-y:auto;min-height:0">
+<button class="btn btn-ghost" onClick="{{ closeWrite }}" style="justify-self:start"><i class="ph-duotone ph-arrow-left" style="font-size:18px"></i>保存して戻る</button>
+<div style="display:grid;gap:2px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-bottom:6px;padding:0 8px">アウトライン</div>
+<sc-for list="{{ outline }}" as="o" hint-placeholder-count="4">
+<div onClick="{{ o.onClick }}" style="padding:5px 8px;border-radius:2px;cursor:pointer;line-height:1.4;padding-left:{{ o.pad }};font-size:{{ o.fz }};font-weight:{{ o.fw }};color:{{ o.fg }}" style-hover="background:var(--color-neutral-200)">{{ o.text }}</div>
+</sc-for>
+</div>
+<div style="display:grid;gap:8px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:0 8px">見出しを挿入</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px"><sc-for list="{{ wChips }}" as="c" hint-placeholder-count="4"><button class="btn btn-secondary" onMouseDown="{{ c.onDown }}" style="font-size:12px;padding:5px 10px">{{ c.label }}</button></sc-for></div>
+<button class="btn btn-primary" onMouseDown="{{ wChap }}" style="margin:4px 4px 0"><i class="ph-duotone ph-bookmark-simple" style="font-size:17px"></i>p.{{ sel.page }} の章メモ</button>
+</div>
+<button class="btn btn-secondary" onClick="{{ toggleFw }}" style="justify-self:start"><i class="ph-duotone ph-cards" style="font-size:17px"></i>{{ fwBtn }}</button>
+</div>
+<div data-scroll="w" style="overflow-y:auto;min-height:0;position:relative">
+<div style="max-width:720px;padding:40px 64px 120px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700);margin-bottom:8px">読書レポート</div>
+<div style="font-size:48px;font-weight:600;line-height:1.1;letter-spacing:-0.02em;text-wrap:pretty">{{ sel.t }}</div>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);margin-top:14px;padding:9px 0;display:flex;align-items:center;gap:18px;font-size:12px;color:var(--color-neutral-800)">
+<span>{{ sel.a }}</span><span>{{ sel.pageLine }}</span><span>{{ wChars }}字</span>
+<div style="flex:1"></div>
+<div style="display:flex;gap:2px;font-size:16px"><sc-for list="{{ sel.stars }}" as="st" hint-placeholder-count="5"><i class="ph-duotone ph-star" onClick="{{ st.onClick }}" style="cursor:pointer;color:{{ st.c }}"></i></sc-for></div>
+<div class="seg"><sc-for list="{{ recOpts }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:11px;padding:3px 8px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+</div>
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ edRef }}" onInput="{{ wInput }}" style="font-size:17px;line-height:1.95;margin-top:8px;min-height:360px;caret-color:var(--color-accent);outline:none"></div>
+</div>
+</div>
+<sc-if value="{{ fwOpen }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:{{ fwX }};top:{{ fwY }};width:340px;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;z-index:2">
+<div onMouseDown="{{ dragStart }}" style="display:flex;align-items:center;gap:8px;padding:10px 10px 10px 14px;background:var(--color-surface);cursor:grab;user-select:none">
+<i class="ph-duotone ph-dots-six-vertical" style="font-size:16px;color:var(--color-neutral-600)"></i>
+<span style="flex:1;font-size:14px;font-weight:600">メモ・引用 <span style="font-weight:400;color:var(--color-neutral-700)">{{ fwCount }}</span></span>
+<button class="btn btn-icon btn-ghost" onClick="{{ toggleMin }}" onMouseDown="{{ stop }}" title="小さくする" style="width:28px;height:28px"><i class="{{ minIcon }}" style="font-size:16px"></i></button>
+<button class="btn btn-icon btn-ghost" onClick="{{ toggleFw }}" onMouseDown="{{ stop }}" title="閉じる" style="width:28px;height:28px"><i class="ph-duotone ph-x" style="font-size:16px"></i></button>
+</div>
+<sc-if value="{{ fwExpanded }}" hint-placeholder-val="{{ true }}">
+<div style="padding:12px 14px 6px"><div class="seg" style="display:flex"><sc-for list="{{ fwTabs }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="flex:1;justify-content:center;font-size:12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div></div>
+<div style="max-height:360px;overflow-y:auto;padding:4px 6px 10px;display:grid;grid-auto-rows:max-content;gap:2px">
+<sc-for list="{{ fwNotes }}" as="n" hint-placeholder-count="3">
+<div onMouseDown="{{ n.onDown }}" style="display:grid;gap:3px;padding:10px;border-radius:2px;cursor:copy" style-hover="background:var(--color-accent-100)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kindLabel }}</span>
+<span style="font-size:14px;line-height:1.65;font-style:{{ n.fs2 }}">{{ n.display }}</span>
+</div>
+</sc-for>
+<sc-if value="{{ fwEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 10px;font-size:13px;color:var(--color-neutral-700)">この本にはまだメモがありません。</div></sc-if>
+</div>
+<div style="padding:8px 14px;background:var(--color-surface);font-size:11px;color:var(--color-neutral-700)">クリックでカーソル位置に挿入 · ドラッグで移動</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ palette }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closePalette }}" style="position:absolute;inset:0;background:color-mix(in srgb,var(--color-neutral-900) 45%,transparent);display:flex;justify-content:center;padding-top:96px;z-index:10">
+<div onClick="{{ stop }}" style="width:640px;align-self:flex-start;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;padding:16px 22px"><i class="ph-duotone ph-magnifying-glass" style="font-size:22px;color:var(--color-accent)"></i><input value="{{ q }}" onChange="{{ onQ }}" onKeyDown="{{ onQKey }}" autoFocus="{{ true }}" placeholder="本棚・メモを検索、または本を追加" style="flex:1;border:0;background:transparent;font:inherit;font-size:20px;color:var(--color-text);outline:none;caret-color:var(--color-accent)"><span style="font-size:11px;color:var(--color-neutral-700)">esc</span></div>
+<div style="padding:0 12px 14px;display:flex;flex-direction:column;gap:2px;max-height:460px;overflow-y:auto">
+<sc-if value="{{ pal.hasShelf }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:10px 10px 4px">{{ pal.shelfTitle }}</div>
+<sc-for list="{{ pal.shelf }}" as="r" hint-placeholder-count="3"><div onClick="{{ r.onClick }}" style="display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:2px;cursor:pointer;background:{{ r.bg }}" style-hover="background:var(--color-accent-100)"><div style="width:28px;height:40px;flex:none;border-radius:1px;background:{{ r.cbg }}"></div><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:15px;font-weight:600">{{ r.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ r.sub }}</span></div><span style="font-size:11px;color:var(--color-accent-800)">開く</span></div></sc-for>
+</sc-if>
+<sc-if value="{{ pal.hasNotes }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:14px 10px 4px">メモ・引用</div>
+<sc-for list="{{ pal.notes }}" as="r" hint-placeholder-count="2"><div onClick="{{ r.onClick }}" style="display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:2px;cursor:pointer;background:{{ r.bg }}" style-hover="background:var(--color-accent-100)"><i class="ph-duotone ph-quotes" style="font-size:18px;width:28px;text-align:center;color:var(--color-accent-2-700)"></i><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:14px">{{ r.text }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ r.src }}</span></div></div></sc-for>
+</sc-if>
+<sc-if value="{{ pal.hasCat }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:14px 10px 4px">本を追加</div>
+<sc-for list="{{ pal.cat }}" as="r" hint-placeholder-count="3"><div onClick="{{ r.onClick }}" style="display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:2px;cursor:pointer;background:{{ r.bg }}" style-hover="background:var(--color-accent-100)"><div style="width:28px;height:40px;flex:none;border-radius:1px;background:var(--color-neutral-300)"></div><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:600">{{ r.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ r.sub }}</span></div><span style="font-size:11px;color:var(--color-accent-800);display:flex;align-items:center;gap:3px"><i class="ph-duotone ph-plus"></i>積読に追加</span></div></sc-for>
+</sc-if>
+<sc-if value="{{ pal.none }}" hint-placeholder-val="{{ false }}"><div style="padding:18px 10px;font-size:14px;color:var(--color-neutral-700)">「{{ q }}」に一致するものはありません。</div></sc-if>
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:14px 10px 4px">操作</div>
+<sc-for list="{{ pal.actions }}" as="r" hint-placeholder-count="2"><div onClick="{{ r.onClick }}" style="display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:2px;cursor:pointer;font-size:14px" style-hover="background:var(--color-accent-100)"><i class="{{ r.icon }}" style="font-size:18px;width:28px;text-align:center;color:var(--color-accent)"></i>{{ r.label }}</div></sc-for>
+</div>
+<div style="display:flex;gap:16px;padding:10px 22px;background:var(--color-surface);font-size:11px;color:var(--color-neutral-700)"><span>↵ 先頭を選択</span><span>esc 閉じる</span><span>⌘K 開閉</span></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;right:32px;bottom:28px;background:var(--color-text);color:var(--color-bg);font-size:14px;padding:12px 18px;border-radius:2px;box-shadow:var(--shadow-lg);z-index:20;display:flex;align-items:center;gap:8px"><i class="ph-duotone ph-check-circle" style="font-size:18px;color:var(--color-accent-300)"></i>{{ toastMsg }}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  COV = [['var(--color-accent-200)','var(--color-accent-900)'],['var(--color-accent-2-200)','var(--color-accent-2-900)'],['var(--color-neutral-300)','var(--color-neutral-900)'],['var(--color-accent-100)','var(--color-accent-900)'],['var(--color-accent-2-100)','var(--color-accent-2-900)'],['var(--color-neutral-200)','var(--color-neutral-900)'],['var(--color-accent-300)','var(--color-accent-900)']];
+  CATALOG = [
+    { t: '暇と退屈の倫理学 増補新版', a: '國分功一郎', pub: '太田出版 · 2015', pages: 432 },
+    { t: '退屈とポスト・トゥルース', a: 'マーク・キングウェル', pub: '集英社新書 · 2021', pages: 272 },
+    { t: '嫌われる勇気', a: '岸見一郎・古賀史健', pub: 'ダイヤモンド社 · 2013', pages: 296 },
+    { t: '夜と霧', a: 'V・E・フランクル', pub: 'みすず書房 · 2002', pages: 169 },
+    { t: '思考の整理学', a: '外山滋比古', pub: 'ちくま文庫 · 1986', pages: 223 },
+    { t: '君たちはどう生きるか', a: '吉野源三郎', pub: '岩波文庫 · 1982', pages: 336 },
+    { t: 'FACTFULNESS', a: 'ハンス・ロスリング', pub: '日経BP · 2019', pages: 400 }
+  ];
+  state = {
+    view: 'library', filter: 'reading', selBook: 'b1', selNote: null, noteFilter: 'all',
+    palette: false, q: '', composing: false, dKind: 'quote', dPage: '', dText: '', dMemo: '',
+    editProg: false, dProg: '', period: '2026', setSec: 'goal', goal: '50', sort: 'recent', quoteView: 'italic', toastMsg: '',
+    books: [
+      { id: 'b1', t: '暇と退屈の倫理学', a: '國分功一郎', pub: '新潮文庫', status: 'reading', page: 182, total: 320, rating: 0, start: '9月3日', c: 0, notes: [
+        { id: 'n1', k: 'quote', p: 182, text: '退屈と向き合うことは、自分の生活を取り戻すことでもある。', memo: '通勤中に読んで一番刺さった箇所。第4章と合わせて読み返す。', date: '9月24日' },
+        { id: 'n2', k: 'memo', p: 140, text: 'パスカルの「部屋でじっとしていられない」話。気晴らしの定義が思っていたより広い。', memo: '', date: '9月18日' },
+        { id: 'n3', k: 'quote', p: 96, text: '人は楽しみを求めているのではなく、興奮を求めている。', memo: '', date: '9月12日' },
+        { id: 'n4', k: 'memo', p: 41, text: '序章で問いが3つ立てられる。読み終えたらそれぞれに自分の答えを書く。', memo: '', date: '9月5日' }
+      ] },
+      { id: 'b2', t: '人新世の「資本論」', a: '斎藤幸平', pub: '集英社新書', status: 'reading', page: 64, total: 375, rating: 0, start: '9月15日', c: 3, notes: [
+        { id: 'n5', k: 'memo', p: 58, text: '第1章の気候データの出典を後で確認する。', memo: '', date: '9月20日' }
+      ] },
+      { id: 'b3', t: 'センス・オブ・ワンダー', a: 'レイチェル・カーソン', pub: '新潮社', status: 'reading', page: 40, total: 60, rating: 0, start: '9月21日', c: 6, notes: [
+        { id: 'n6', k: 'quote', p: 24, text: '知ることは感じることの半分も重要ではない。', memo: '子どもと散歩するときに思い出したい。', date: '9月22日' }
+      ] },
+      { id: 'b4', t: 'こころ', a: '夏目漱石', pub: '新潮文庫', status: 'done', page: 384, total: 384, rating: 5, start: '', c: 2, notes: [
+        { id: 'n7', k: 'memo', p: 210, text: '先生の手紙の章は一気に読んだ。語り手が変わるだけで、同じ出来事の重さが変わる。', memo: '', date: '8月30日' }
+      ] },
+      { id: 'b5', t: '三体', a: '劉慈欣', pub: '早川書房', status: 'done', page: 448, total: 448, rating: 5, start: '', c: 5, notes: [
+        { id: 'n8', k: 'memo', p: 312, text: '中盤で物語の規模が一気に変わる。ここから止まらなくなった。', memo: '', date: '8月12日' }
+      ] },
+      { id: 'b6', t: 'サピエンス全史', a: 'ユヴァル・ノア・ハラリ', pub: '河出書房新社', status: 'done', page: 560, total: 560, rating: 4, start: '', c: 1, notes: [] },
+      { id: 'b7', t: 'ファスト＆スロー', a: 'ダニエル・カーネマン', pub: '早川書房', status: 'done', page: 512, total: 512, rating: 3, start: '', c: 4, notes: [] },
+      { id: 'b8', t: '正義の教室', a: '飲茶', pub: 'ダイヤモンド社', status: 'done', page: 320, total: 320, rating: 4, start: '', c: 3, notes: [] },
+      { id: 'b9', t: '影響力の武器', a: 'ロバート・チャルディーニ', pub: '誠信書房', status: 'tsundoku', page: 0, total: 480, rating: 0, start: '', c: 0, notes: [] },
+      { id: 'b10', t: '利己的な遺伝子', a: 'リチャード・ドーキンス', pub: '紀伊國屋書店', status: 'tsundoku', page: 0, total: 584, rating: 0, start: '', c: 1, notes: [] },
+      { id: 'b11', t: '銃・病原菌・鉄', a: 'ジャレド・ダイアモンド', pub: '草思社', status: 'tsundoku', page: 0, total: 416, rating: 0, start: '', c: 2, notes: [] }
+    ]
+  };
+  edRef = React.createRef(); wrRef = React.createRef();
+  H3 = 'font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3';
+  H4 = 'font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)';
+  PS = 'margin:0 0 14px';
+  componentDidMount() {
+    this.onKey = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.setState(s => ({ palette: !s.palette, q: '' })); }
+      else if (e.key === 'Escape') { if (this.state.writing && !this.state.palette) this.closeWrite(); else this.setState({ palette: false, composing: false, editProg: false }); }
+    };
+    this.onMove = e => {
+      const d = this.drag; if (!d) return;
+      const f = this.wrRef.current, W = f ? f.clientWidth : 1200, H = f ? f.clientHeight : 760;
+      this.setState({ fw: { x: Math.min(Math.max(d.ox + e.clientX - d.sx, 0), W - 340), y: Math.min(Math.max(d.oy + e.clientY - d.sy, 0), H - 52) } });
+    };
+    this.onUp = () => { this.drag = null; };
+    window.addEventListener('keydown', this.onKey); window.addEventListener('mousemove', this.onMove); window.addEventListener('mouseup', this.onUp);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); window.removeEventListener('mousemove', this.onMove); window.removeEventListener('mouseup', this.onUp); clearTimeout(this.tt); }
+  seedReport(b) {
+    if (b.id === 'b1') return `<h3 style="${this.H3}">要約</h3><p style="${this.PS}">人はなぜ退屈するのか、退屈とどう向き合えばいいのかを、哲学・経済史・人類学をまたいで考える本。</p><h3 style="${this.H3}">章ごとのメモ</h3><h4 style="${this.H4}">第一章 暇と退屈の原理論 · p.21</h4><p style="${this.PS}">パスカルの話が出発点。気晴らしは、欲しいものそのものより、追いかける過程を求めているという整理がわかりやすい。</p><h3 style="${this.H3}">感想</h3><p style="${this.PS}">退屈を「なくすべきもの」ではなく、生活の組み立て方の問題として扱っているのが新鮮だった。</p>`;
+    return `<h3 style="${this.H3}">要約</h3><p style="${this.PS}"><br></p>`;
+  }
+  openWrite() {
+    const b = this.state.books.find(x => x.id === this.state.selBook);
+    const W = this.wrRef.current ? this.wrRef.current.clientWidth : window.innerWidth;
+    this.setState({ writing: true, composing: false, editProg: false, fw: this.state.fw || { x: Math.max(W - 380, 300), y: 88 } }, () => {
+      const ed = this.edRef.current; if (!ed) return;
+      ed.innerHTML = (this.state.reports || {})[b.id] || this.seedReport(b);
+      this.wRecount();
+    });
+  }
+  closeWrite() {
+    const ed = this.edRef.current, id = this.state.selBook;
+    this.setState(s => ({ writing: false, reports: { ...(s.reports || {}), [id]: ed ? ed.innerHTML : '' } }));
+    this.toast('レポートを保存しました');
+  }
+  wRecount() {
+    const ed = this.edRef.current; if (!ed) return;
+    this.setState({ wChars: ed.innerText.replace(/\s/g, '').length, outline: [...ed.querySelectorAll('h3,h4')].map(h => ({ text: h.innerText.trim(), lv: h.tagName === 'H3' ? 1 : 2, el: h })).filter(o => o.text) });
+  }
+  wIns(html) {
+    const ed = this.edRef.current; if (!ed) return;
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !ed.contains(sel.anchorNode)) { ed.focus(); const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); sel.removeAllRanges(); sel.addRange(r); }
+    else { const r = sel.getRangeAt(0).cloneRange(); ed.focus(); sel.removeAllRanges(); sel.addRange(r); }
+    document.execCommand('insertHTML', false, html);
+    setTimeout(() => this.wRecount(), 0);
+  }
+  toast(msg) { clearTimeout(this.tt); this.setState({ toastMsg: msg }); this.tt = setTimeout(() => this.setState({ toastMsg: '' }), 2400); }
+  updBook(id, patch) { this.setState(s => ({ books: s.books.map(b => b.id === id ? { ...b, ...patch } : b) })); }
+  addBook(c) {
+    const id = 'b' + Date.now();
+    this.setState(s => ({ books: [...s.books, { id, t: c.t, a: c.a, pub: c.pub.split(' · ')[0], status: 'tsundoku', page: 0, total: c.pages, rating: 0, start: '', c: s.books.length, notes: [] }], selBook: id, filter: 'tsundoku', view: 'library', palette: false, q: '', composing: false, editProg: false }));
+    this.toast(`「${c.t}」を積読に追加しました`);
+  }
+  periods(goal) {
+    const g = parseInt(goal) || 0;
+    return {
+      '2026': { label: '2026年', sub: '1月〜9月', count: 42, goalLine: g > 42 ? `目標 ${g}冊まで あと${g - 42}冊` : `目標 ${g}冊を達成しました`, barTitle: '月ごとの読了', bars: [4, 6, 3, 8, 5, 7, 8, 5, 3], hl: 8, lbl: m => `${m}月`, pages: '11,480', notes: '186', genre: '#哲学', quote: '人は楽しみを求めているのではなく、興奮を求めている。', src: '暇と退屈の倫理学 · p.96', finished: ['b4', 'b5', 'b6', 'b7', 'b8'] },
+      '2026-09': { label: '2026年9月', sub: '今月', count: 3, goalLine: '先月より2冊少ないペース', barTitle: '週ごとの読了', bars: [1, 0, 1, 1], hl: 3, lbl: w => `第${w}週`, pages: '842', notes: '24', genre: '#哲学', quote: '退屈と向き合うことは、自分の生活を取り戻すことでもある。', src: '暇と退屈の倫理学 · p.182', finished: ['b8'] },
+      '2026-08': { label: '2026年8月', sub: '先月', count: 5, goalLine: '夏休みで多めに読めた月', barTitle: '週ごとの読了', bars: [1, 2, 1, 1, 0], hl: -1, lbl: w => `第${w}週`, pages: '1,904', notes: '31', genre: '#小説', quote: '知ることは感じることの半分も重要ではない。', src: 'センス・オブ・ワンダー · p.24', finished: ['b4', 'b5'] },
+      '2025': { label: '2025年', sub: '1月〜12月', count: 51, goalLine: '目標 48冊を達成', barTitle: '月ごとの読了', bars: [3, 4, 5, 4, 3, 5, 6, 6, 4, 4, 3, 4], hl: -1, lbl: m => `${m}月`, pages: '14,210', notes: '233', genre: '#歴史', quote: '人は楽しみを求めているのではなく、興奮を求めている。', src: '暇と退屈の倫理学 · p.96', finished: ['b6', 'b7'] }
+    };
+  }
+  renderVals() {
+    const s = this.state, set = o => this.setState(o), books = s.books;
+    const stLabel = { reading: '読書中', done: '読了', tsundoku: '積読' };
+    const tagCls = { reading: 'tag tag-accent', done: 'tag tag-outline', tsundoku: 'tag tag-neutral' };
+    const cov = b => this.COV[b.c % this.COV.length];
+    const on = v => v ? { bg: 'var(--color-accent-100)', fg: 'var(--color-accent-800)' } : { bg: 'transparent', fg: 'inherit' };
+    const seg = (label, v, fn) => ({ label, bg: v ? 'var(--color-accent)' : 'transparent', fg: v ? 'var(--color-bg)' : 'inherit', onClick: fn });
+    const railFg = k => s.view === k ? { bg: 'var(--color-accent-100)', fg: 'var(--color-accent-700)' } : { bg: 'transparent', fg: 'var(--color-neutral-700)' };
+    const rail = [['library', '本棚', 'ph-books'], ['notes', 'メモ', 'ph-quotes'], ['review', '振り返り', 'ph-chart-line-up']].map(([k, l, i]) => ({ label: l, icon: 'ph-duotone ' + i, ...railFg(k), onClick: () => set({ view: k }) }));
+    const railSettings = { ...railFg('settings'), onClick: () => set({ view: 'settings' }) };
+    const qfs = s.quoteView === 'italic' ? 'italic' : 'normal';
+    const pct = b => Math.round(b.page / b.total * 100);
+    const kc = k => k === 'quote' ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)';
+    const mapNote = n => ({ ...n, isQuote: n.k === 'quote', isMemo: n.k === 'memo', kindLabel: (n.k === 'quote' ? '引用' : 'メモ') + ' · p.' + n.p, kc: kc(n.k), fs: qfs, fs2: n.k === 'quote' ? qfs : 'normal', hasMemo: !!n.memo, display: n.k === 'quote' ? `「${n.text}」` : n.text });
+
+    const cnt = k => books.filter(b => b.status === k).length;
+    const filters = [['reading', '読書中'], ['done', '読了'], ['tsundoku', '積読'], ['all', 'すべて']].map(([k, l]) => seg(k === 'all' ? l : `${l} ${cnt(k)}`, s.filter === k, () => set({ filter: k })));
+    let lb = books.filter(b => s.filter === 'all' || b.status === s.filter);
+    if (s.sort === 'title') lb = [...lb].sort((a, b) => a.t.localeCompare(b.t, 'ja'));
+    if (s.sort === 'progress') lb = [...lb].sort((a, b) => b.page / b.total - a.page / a.total);
+    const meta = b => b.status === 'reading' ? `${pct(b)}% · メモ ${b.notes.length}` : b.status === 'done' ? `${b.a} · ${'★'.repeat(b.rating)}` : b.a;
+    const listBooks = lb.map(b => ({ t: b.t, meta: meta(b), cbg: cov(b)[0], bg: b.id === s.selBook ? 'var(--color-accent-100)' : 'transparent', onClick: () => set({ selBook: b.id, composing: false, editProg: false }) }));
+    const sb = books.find(b => b.id === s.selBook) || books[0];
+    const sel = {
+      t: sb.t, a: sb.a, pub: sb.pub, total: sb.total, statusLabel: stLabel[sb.status], tagCls: tagCls[sb.status], cbg: cov(sb)[0], cfg: cov(sb)[1],
+      pageLine: `p.${sb.page} / ${sb.total}`, pct: pct(sb) + '%', since: sb.start ? `${sb.start}から` : '今日から',
+      isReading: sb.status === 'reading', isDone: sb.status === 'done', isTsundoku: sb.status === 'tsundoku',
+      stars: [1, 2, 3, 4, 5].map(i => ({ c: i <= sb.rating ? 'var(--color-accent)' : 'var(--color-neutral-400)', onClick: () => this.updBook(sb.id, { rating: i }) })),
+      notes: [...sb.notes].sort((a, b) => b.p - a.p).map(mapNote), noteCount: sb.notes.length, noNotes: sb.notes.length === 0
+    };
+    const startWrite = () => set({ composing: true, editProg: false, dKind: 'quote', dPage: String(sb.page || ''), dText: '', dMemo: '' });
+
+    const all = books.flatMap(b => b.notes.map(n => ({ ...n, b })));
+    const nf = all.filter(n => s.noteFilter === 'all' || n.k === s.noteFilter);
+    const selNoteId = nf.find(n => n.id === s.selNote) ? s.selNote : (nf[0] && nf[0].id);
+    const notesList = nf.map(n => ({ excerpt: n.text.length > 42 ? n.text.slice(0, 42) + '…' : n.text, src: `${n.b.t} · p.${n.p}`, kindLabel: n.k === 'quote' ? '引用' : 'メモ', kc: kc(n.k), isQuote: n.k === 'quote', isMemo: n.k === 'memo', fs: qfs, bg: n.id === selNoteId ? 'var(--color-accent-100)' : 'transparent', onClick: () => set({ selNote: n.id }) }));
+    const sn = all.find(n => n.id === selNoteId);
+    const sibs = sn ? sn.b.notes.filter(x => x.id !== sn.id).map(x => ({ ...mapNote(x), onClick: () => set({ selNote: x.id, noteFilter: 'all' }) })) : [];
+    const selN = sn ? { ...mapNote(sn), bookT: sn.b.t, bookA: sn.b.a, cbg: cov(sn.b)[0], open: () => set({ view: 'library', selBook: sn.b.id, filter: sn.b.status }), siblings: sibs, hasSiblings: sibs.length > 0 } : { siblings: [], hasSiblings: false, open: () => {} };
+
+    const P = this.periods(s.goal);
+    const periodItems = ['2026', '2026-09', '2026-08', '2025'].map(k => ({ label: P[k].label, sub: P[k].sub, count: `${P[k].count}冊`, bg: s.period === k ? 'var(--color-accent-100)' : 'transparent', onClick: () => set({ period: k }) }));
+    const p = P[s.period], mx = Math.max(...p.bars, 1);
+    const rv = { ...p, bars: p.bars.map((v, i) => ({ h: Math.max(v / mx * 100, 3) + '%', bg: i === p.hl ? 'var(--color-accent)' : 'var(--color-accent-300)', label: p.lbl(i + 1) })), finished: p.finished.map(id => books.find(b => b.id === id)).filter(Boolean).map(b => ({ t: b.t, cbg: cov(b)[0], cfg: cov(b)[1] })) };
+
+    const secItems = [['goal', '読書目標', 'ph-target'], ['display', '表示', 'ph-eye'], ['data', 'データ', 'ph-export'], ['account', 'アカウント', 'ph-user-circle']].map(([k, l, i]) => ({ label: l, icon: 'ph-duotone ' + i, ...on(s.setSec === k), onClick: () => set({ setSec: k }) }));
+    const g = parseInt(s.goal) || 0;
+
+    const q = s.q.trim().toLowerCase(), has = str => (str || '').toLowerCase().includes(q);
+    const close = { palette: false, q: '' };
+    const shelf = (q ? books.filter(b => has(b.t) || has(b.a)) : books.filter(b => b.status === 'reading')).slice(0, 4).map(b => ({ t: b.t, sub: `${b.a} · ${stLabel[b.status]}`, cbg: cov(b)[0], onClick: () => set({ ...close, view: 'library', selBook: b.id, filter: b.status }) }));
+    const pnotes = q ? all.filter(n => has(n.text) || has(n.memo)).slice(0, 3).map(n => ({ text: n.text.length > 36 ? n.text.slice(0, 36) + '…' : n.text, src: `${n.b.t} · p.${n.p}`, onClick: () => set({ ...close, view: 'notes', selNote: n.id, noteFilter: 'all' }) })) : [];
+    const owned = new Set(books.map(b => b.t));
+    const cat = q ? this.CATALOG.filter(c => !owned.has(c.t) && (has(c.t) || has(c.a))).slice(0, 4).map(c => ({ t: c.t, sub: `${c.a} · ${c.pub}`, onClick: () => this.addBook(c) })) : [];
+    const flat = [...shelf, ...pnotes, ...cat];
+    flat.forEach((r, i) => { r.bg = i === 0 ? 'var(--color-accent-100)' : 'transparent'; });
+    const pal = {
+      shelf, notes: pnotes, cat, hasShelf: shelf.length > 0, hasNotes: pnotes.length > 0, hasCat: cat.length > 0, none: !!q && flat.length === 0,
+      shelfTitle: q ? '本棚' : 'いま読んでいる',
+      actions: [
+        { label: 'ISBN・バーコードで追加', icon: 'ph-duotone ph-barcode', onClick: () => { set(close); this.toast('ISBN読み取りはこのモックでは動きません'); } },
+        { label: `「${sb.t}」にメモを書く`, icon: 'ph-duotone ph-pencil-simple-line', onClick: () => { set({ ...close, view: 'library' }); startWrite(); } }
+      ]
+    };
+
+    sel.page = sb.page;
+    const pd = e => e.preventDefault();
+    const fwTab = s.fwTab || 'all', fwOpen = s.fwOpen !== false, fw = s.fw || { x: 800, y: 88 };
+    const bNotes = [...sb.notes].sort((a, b) => b.p - a.p).filter(n => fwTab === 'all' || n.k === fwTab);
+    const qHtml = n => n.k === 'quote' ? `<blockquote style="margin:6px 0 18px 24px;font-style:${qfs};color:var(--color-accent-2-800)">「${n.text}」 <span style="font-style:normal;font-size:12px;color:var(--color-neutral-700)">p.${n.p}</span></blockquote><p style="${this.PS}"><br></p>` : `<p style="${this.PS}">${n.text}（p.${n.p}）</p>`;
+    const curCh = sb.page || 1;
+    const rec = (s.recMap || {})[sb.id] || 'strong';
+    return {
+      writing: !!s.writing, wrRef: this.wrRef, edRef: this.edRef, openWrite: () => this.openWrite(), closeWrite: () => this.closeWrite(),
+      wInput: () => this.wRecount(), wChars: (s.wChars || 0).toLocaleString('ja-JP'), stop: e => e.stopPropagation(),
+      outline: (s.outline || []).map(o => ({ text: o.text, pad: o.lv === 1 ? '8px' : '22px', fz: o.lv === 1 ? '14px' : '12px', fw: o.lv === 1 ? '600' : '400', fg: o.lv === 1 ? 'var(--color-text)' : 'var(--color-neutral-800)',
+        onClick: () => { const sc = o.el.closest('[data-scroll]'); if (sc) sc.scrollTo({ top: o.el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 24, behavior: 'smooth' }); } })),
+      wChips: [['要約', '要約'], ['感想', '感想'], ['学び・行動', '行動に移すこと'], ['章メモ', null]].map(([l, h]) => ({ label: l, onDown: e => { pd(e); this.wIns(h ? `<h3 style="${this.H3}">${h}</h3><p style="${this.PS}"><br></p>` : `<h4 style="${this.H4}">章 · p.${curCh}</h4><p style="${this.PS}"><br></p>`); } })),
+      wChap: e => { pd(e); this.wIns(`<h4 style="${this.H4}">p.${curCh} まで</h4><p style="${this.PS}"><br></p>`); },
+      recOpts: [['strong', '人にすすめたい'], ['some', '人を選ぶ'], ['self', '自分用']].map(([v, l]) => ({ label: l, bg: rec === v ? 'var(--color-accent)' : 'transparent', fg: rec === v ? 'var(--color-bg)' : 'inherit', onClick: () => set({ recMap: { ...(s.recMap || {}), [sb.id]: v } }) })),
+      fwOpen, fwBtn: fwOpen ? 'メモ窓を閉じる' : 'メモ窓を開く', toggleFw: () => set({ fwOpen: !fwOpen }),
+      fwX: fw.x + 'px', fwY: fw.y + 'px', fwExpanded: !s.fwMin, minIcon: s.fwMin ? 'ph-duotone ph-arrows-out-simple' : 'ph-duotone ph-minus', toggleMin: () => set({ fwMin: !s.fwMin }),
+      dragStart: e => { pd(e); this.drag = { sx: e.clientX, sy: e.clientY, ox: fw.x, oy: fw.y }; },
+      fwTabs: [['all', 'すべて'], ['quote', '引用'], ['memo', 'メモ']].map(([k, l]) => seg(l, fwTab === k, () => set({ fwTab: k }))),
+      fwNotes: bNotes.map(n => ({ ...mapNote(n), onDown: e => { pd(e); this.wIns(qHtml(n)); } })), fwCount: bNotes.length, fwEmpty: bNotes.length === 0,
+      rail, railSettings, isLib: s.view === 'library', isNotes: s.view === 'notes', isReview: s.view === 'review', isSettings: s.view === 'settings',
+      filters, listBooks, sel, startWrite,
+      startProg: () => set({ editProg: true, composing: false, dProg: String(sb.page) }),
+      startReading: () => { this.updBook(sb.id, { status: 'reading', page: 0, start: '9月25日' }); set({ filter: 'reading' }); this.toast(`「${sb.t}」を読み始めました`); },
+      editProg: s.editProg, dProg: s.dProg, onProg: e => set({ dProg: e.target.value }),
+      saveProg: () => {
+        const pg = Math.min(sb.total, Math.max(0, parseInt(s.dProg) || 0));
+        const doneNow = pg >= sb.total;
+        this.updBook(sb.id, doneNow ? { page: pg, status: 'done' } : { page: pg });
+        set({ editProg: false, ...(doneNow ? { filter: 'done' } : {}) });
+        this.toast(doneNow ? `「${sb.t}」を読了にしました` : `p.${pg} まで記録しました`);
+      },
+      cancelEdit: () => set({ composing: false, editProg: false }),
+      composing: s.composing, kindOpts: [seg('引用', s.dKind === 'quote', () => set({ dKind: 'quote' })), seg('メモ', s.dKind === 'memo', () => set({ dKind: 'memo' }))],
+      dPage: s.dPage, dText: s.dText, dMemo: s.dMemo, isQuoteDraft: s.dKind === 'quote',
+      dLabel: s.dKind === 'quote' ? '引用する文章' : 'メモ', dPlaceholder: s.dKind === 'quote' ? '本文をそのまま書き写す' : '考えたこと、気づいたこと', dFs: s.dKind === 'quote' ? qfs : 'normal',
+      onPage: e => set({ dPage: e.target.value }), onText: e => set({ dText: e.target.value }), onMemo: e => set({ dMemo: e.target.value }),
+      cantSave: !s.dText.trim(),
+      saveNote: () => {
+        if (!s.dText.trim()) return;
+        const n = { id: 'n' + Date.now(), k: s.dKind, p: parseInt(s.dPage) || sb.page, text: s.dText.trim(), memo: s.dKind === 'quote' ? s.dMemo.trim() : '', date: '9月25日' };
+        this.updBook(sb.id, { notes: [...sb.notes, n] });
+        set({ composing: false });
+        this.toast(`p.${n.p} に${s.dKind === 'quote' ? '引用' : 'メモ'}を保存しました`);
+      },
+      noteFilters: [['all', 'すべて'], ['quote', '引用'], ['memo', 'メモ']].map(([k, l]) => seg(l, s.noteFilter === k, () => set({ noteFilter: k }))),
+      notesList, selN, noteTotal: all.length, bookTotal: books.length,
+      periodItems, rv, quoteFs: qfs,
+      secItems, secGoal: s.setSec === 'goal', secDisplay: s.setSec === 'display', secData: s.setSec === 'data', secAccount: s.setSec === 'account',
+      goal: s.goal, onGoal: e => set({ goal: e.target.value }),
+      goalLine: g > 42 ? `今年はここまで42冊読了。目標まであと${g - 42}冊、月に${Math.ceil((g - 42) / 3)}冊のペースです。` : `今年はここまで42冊読了。目標の${g}冊を達成しています。`,
+      sortOpts: [['recent', '追加順'], ['title', '書名'], ['progress', '進捗']].map(([k, l]) => seg(l, s.sort === k, () => set({ sort: k }))),
+      quoteOpts: [['italic', 'イタリック'], ['plain', '標準']].map(([k, l]) => seg(l, s.quoteView === k, () => set({ quoteView: k }))),
+      exportMd: () => this.toast('Markdownで書き出しました（モック）'), exportCsv: () => this.toast('CSVで書き出しました（モック）'),
+      palette: s.palette, q: s.q, pal,
+      openPalette: () => set({ palette: true, q: '' }), closePalette: () => set(close), stop: e => e.stopPropagation(),
+      onQ: e => set({ q: e.target.value }), onQKey: e => { if (e.key === 'Enter' && flat[0]) flat[0].onClick(); },
+      hasToast: !!s.toastMsg, toastMsg: s.toastMsg
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1241 @@
+/* アプリ固有のスタイル。
+   色・余白・角丸・影は broadsheet.css の変数からだけ取る（直書きしない）。
+   px を直接書いているのはデザイン指定の実寸（表紙のサイズなど）だけ。 */
+
+/* デザインシステムは欧文だけを見ているので、和文を足す。
+   これをしないとボタンの中の日本語が system-ui になる（ハンドオフの指示）。 */
+:root {
+  --font-heading: "Source Serif 4", "Noto Serif JP", serif;
+  --font-body: "Source Serif 4", "Noto Serif JP", serif;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+button {
+  font: inherit;
+}
+.btn {
+  white-space: nowrap;
+}
+
+/* ───────────────────────────── 全体の骨格（3ペイン）
+   罫線で区切らず、背景色の違いだけでペインを分ける。
+   Broadsheet は左揃えの非対称レイアウトなので、中央寄せはしない。 */
+.shell {
+  height: 100vh;
+  min-height: 640px;
+  min-width: 1080px;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  overflow: hidden;
+  position: relative;
+}
+.panes {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ───────────────────────────── A. アイコンレール */
+.rail {
+  background: var(--color-surface);
+  padding: 22px 0 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.rail-logo {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 18px;
+}
+.rail-spacer {
+  flex: 1;
+}
+.rail-item {
+  width: 60px;
+  padding: 8px 0 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 10px;
+  background: transparent;
+  color: var(--color-neutral-700);
+}
+.rail-item i {
+  font-size: 24px;
+}
+.rail-item:hover {
+  background: var(--color-neutral-300);
+}
+.rail-item[aria-current='page'] {
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+}
+
+/* ───────────────────────────── B. 一覧ペイン
+   grid を使う。flex column にすると overflow:hidden の .seg が潰れる。 */
+.list-pane {
+  background: var(--color-neutral-100);
+  padding: 28px 18px;
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 6px;
+}
+.list-title {
+  font-size: 24px;
+  font-weight: 600;
+}
+.list-aside {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.list-action {
+  border: 0;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--color-neutral-800);
+  background: var(--color-neutral-200);
+  padding: 3px 8px;
+  border-radius: var(--radius-md);
+}
+.list-action:hover {
+  background: var(--color-neutral-300);
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row {
+  display: flex;
+  gap: 12px;
+  padding: 9px 8px;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+}
+.row:hover {
+  background: var(--color-neutral-200);
+}
+.row[aria-current='true'] {
+  background: var(--color-accent-100);
+}
+.row-note {
+  padding: 12px 10px;
+  flex-direction: column;
+  gap: 4px;
+}
+.row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.row-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.row-meta {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+.row-period {
+  justify-content: space-between;
+  align-items: baseline;
+}
+.row-period-label {
+  font-size: 16px;
+  font-weight: 600;
+}
+.row-period-count {
+  font-size: 13px;
+}
+.row-settings {
+  align-items: center;
+  font-size: 15px;
+  gap: 12px;
+}
+.row-settings i {
+  font-size: 20px;
+}
+
+/* 一覧ペインのセグメント（デザイン指定で等幅・12px にする） */
+.list-pane .seg {
+  display: flex;
+}
+.list-pane .seg-opt {
+  flex: 1;
+  justify-content: center;
+  padding: 7px 4px;
+  font-size: 12px;
+}
+
+/* 表紙。画像が無い本は同じ形のプレースホルダーを出す */
+.cover {
+  flex: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  background: var(--color-accent-200);
+  object-fit: cover;
+  display: block;
+  overflow: hidden;
+  position: relative;
+}
+.cover-sm {
+  width: 36px;
+  height: 52px;
+}
+.cover-md {
+  width: 72px;
+  height: 104px;
+}
+.cover-lg {
+  width: 120px;
+  height: 176px;
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-md);
+}
+.cover-ph {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px;
+  overflow: hidden;
+}
+.cover-lg.cover-ph {
+  padding: 12px;
+}
+.cover-ph-title {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-accent-900);
+}
+.cover-lg .cover-ph-title {
+  font-size: 14px;
+}
+.cover-ph-author {
+  font-size: 8px;
+  color: var(--color-accent-800);
+}
+.cover-lg .cover-ph-author {
+  font-size: 10px;
+}
+
+/* ───────────────────────────── C. 詳細ペイン */
+.detail-pane {
+  overflow-y: auto;
+  min-height: 0;
+}
+.detail {
+  /* デザインの指定は 760px だが、画面を広く使いたいので少し広げている */
+  max-width: 920px;
+  padding: 48px 64px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+.detail-empty {
+  padding: 48px 64px;
+  font-size: 15px;
+  color: var(--color-neutral-700);
+}
+
+.book-head {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+.book-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.book-title {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+}
+.book-byline {
+  font-size: 13px;
+  color: var(--color-neutral-800);
+}
+.section-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+}
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.section-aside {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+
+/* 進捗 */
+.progress-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  max-width: 520px;
+  font-size: 12px;
+  color: var(--color-neutral-800);
+}
+.progress-bar {
+  height: 3px;
+  max-width: 520px;
+  background: var(--color-neutral-300);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* インライン編集パネル */
+.panel {
+  background: var(--color-surface);
+  padding: 18px 22px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.panel-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.input-narrow {
+  width: 140px;
+}
+.input-page {
+  width: 110px;
+}
+
+/* 記録一覧 */
+.records {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.record {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.record-kind {
+  font-size: 12px;
+}
+.kind-quote {
+  color: var(--color-accent-2-700);
+}
+.kind-memo {
+  color: var(--color-neutral-700);
+}
+.record-quote {
+  font-size: 18px;
+  line-height: 1.75;
+  font-style: italic;
+  margin: 0;
+}
+.record-memo {
+  font-size: 16px;
+  line-height: 1.75;
+  margin: 0;
+}
+.record-sub {
+  font-size: 14px;
+  color: var(--color-neutral-800);
+  margin: 0;
+}
+.record-tools {
+  display: flex;
+  gap: var(--space-1);
+}
+.quote-styled {
+  font-style: italic;
+}
+
+/* 引用の書体は設定で切り替えられる */
+:root[data-quote='plain'] .record-quote,
+:root[data-quote='plain'] .quote-styled {
+  font-style: normal;
+}
+
+/* ───────────────────────────── C-3 振り返り */
+.review-count {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.review-goal {
+  font-size: 13px;
+  color: var(--color-neutral-800);
+}
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 120px;
+}
+.chart-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+.chart-bar {
+  width: 100%;
+  background: var(--color-accent-300);
+  border-radius: var(--radius-sm);
+  min-height: 2px;
+}
+.chart-col[data-current='true'] .chart-bar {
+  background: var(--color-accent);
+}
+.chart-label {
+  font-size: 10px;
+  color: var(--color-neutral-700);
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.shelf {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* ───────────────────────────── D. ⌘K コマンドパレット */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: color-mix(in srgb, var(--color-neutral-900) 45%, transparent);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 96px;
+}
+.palette {
+  width: 640px;
+  max-width: calc(100% - 64px);
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 160px);
+}
+.palette-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+.palette-input-row i {
+  font-size: 22px;
+  color: var(--color-accent);
+}
+.palette-input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 20px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  outline: none;
+}
+.palette-esc {
+  font-size: 11px;
+  color: var(--color-neutral-600);
+}
+.palette-results {
+  overflow-y: auto;
+  padding-bottom: var(--space-2);
+}
+.palette-group-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--color-neutral-600);
+  padding: var(--space-2) var(--space-4) 4px;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 9px var(--space-4);
+  cursor: pointer;
+  font-size: 14px;
+}
+.palette-item:hover {
+  background: var(--color-neutral-200);
+}
+.palette-item[aria-selected='true'] {
+  background: var(--color-accent-100);
+}
+.palette-item-sub {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+  margin-left: auto;
+  padding-left: var(--space-2);
+}
+.palette-empty {
+  padding: var(--space-3) var(--space-4);
+  font-size: 14px;
+  color: var(--color-neutral-700);
+}
+.palette-foot {
+  background: var(--color-surface);
+  font-size: 11px;
+  color: var(--color-neutral-700);
+  padding: 8px var(--space-4);
+  display: flex;
+  gap: var(--space-4);
+}
+
+/* ───────────────────────────── E. レポート執筆モード（デザイン #6a）
+   上部にバー、その下を「書く（Markdown原文）／読む（紙面）」の2ペインに割る。 */
+.report {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.report-bar {
+  height: 56px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+}
+.report-bar-title {
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-bar .btn {
+  padding: 6px 9px;
+  font-size: 13px;
+}
+.report-bar .seg-opt {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+.report-status {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+  margin-right: var(--space-2);
+}
+.report-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.report-spacer {
+  flex: 1;
+}
+
+.report-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.report-body[data-view='write'],
+.report-body[data-view='read'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.report-source {
+  background: var(--color-neutral-100);
+  overflow-y: auto;
+  min-height: 0;
+}
+/* 原文もセリフ体で組む。等幅にすると紙面と別物に見えてしまう */
+.report-source textarea {
+  display: block;
+  width: 100%;
+  min-height: 100%;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.9;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  padding: 36px 48px 120px;
+}
+.report-source textarea::placeholder {
+  color: var(--color-neutral-500);
+}
+.report-preview {
+  overflow-y: auto;
+  min-height: 0;
+}
+.report-sheet {
+  padding: 36px 48px 120px;
+  max-width: 760px;
+}
+.report-body[data-view='read'] .report-sheet {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.report-kicker {
+  font-size: 12px;
+  color: var(--color-accent-700);
+}
+.report-title {
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 4px 0 16px;
+}
+/* 題字罫（thick-thin rule）。このアプリで罫線を引いてよい唯一の場所 */
+.report-rule {
+  border-top: 3px solid var(--color-text);
+  border-bottom: 1px solid var(--color-text);
+  padding: 9px 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--color-neutral-800);
+  margin-bottom: 28px;
+}
+
+/* 記法タブ */
+.syntax-list {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  display: grid;
+  gap: 1px;
+}
+.syntax-row {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: copy;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  color: inherit;
+}
+.syntax-row:hover {
+  background: var(--color-accent-100);
+}
+.syntax-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--color-neutral-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.memo-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+}
+.memo-tab {
+  border: 0;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: transparent;
+  color: var(--color-neutral-700);
+}
+.memo-tab[aria-selected='true'] {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+/* フローティングのメモ窓 */
+.memo-window {
+  position: absolute;
+  width: 340px;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.memo-bar {
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: grab;
+  font-size: 12px;
+}
+.memo-bar:active {
+  cursor: grabbing;
+}
+.memo-bar-title {
+  flex: 1;
+  font-weight: 600;
+}
+.memo-bar button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-neutral-700);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  display: flex;
+}
+.memo-bar button:hover {
+  background: var(--color-neutral-300);
+}
+.memo-filter {
+  padding: 8px 10px 4px;
+}
+.memo-filter .seg {
+  display: flex;
+  width: 100%;
+}
+.memo-filter .seg-opt {
+  flex: 1;
+  justify-content: center;
+  font-size: 11px;
+  padding: 5px 4px;
+}
+.memo-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.memo-item {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  cursor: copy;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font: inherit;
+}
+.memo-item:hover {
+  background: var(--color-accent-100);
+}
+.memo-item-kind {
+  font-size: 10px;
+}
+.memo-item-text {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.memo-foot {
+  background: var(--color-surface);
+  font-size: 11px;
+  color: var(--color-neutral-700);
+  padding: 6px 10px;
+}
+
+/* ───────────────────────────── F. トースト */
+.toast {
+  position: absolute;
+  right: 32px;
+  bottom: 28px;
+  z-index: 10;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast i {
+  color: var(--color-accent-300);
+  font-size: 18px;
+}
+
+/* 星評価 */
+.stars {
+  display: inline-flex;
+  align-items: center;
+}
+.star {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 1px;
+  line-height: 1;
+  color: var(--color-neutral-400);
+  display: flex;
+}
+.star[data-on='true'] {
+  color: var(--color-accent);
+}
+
+/* 汎用 */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.muted {
+  color: var(--color-neutral-700);
+}
+
+
+/* ───────────────────────────── タグ */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: calc(var(--radius-md) * 0.75);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  cursor: pointer;
+}
+.tag-chip:hover {
+  background: var(--color-accent-200);
+}
+.tag-chip[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+.tag-chip-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  opacity: 0.6;
+}
+.tag-chip-remove:hover {
+  opacity: 1;
+}
+.tag-input {
+  width: 140px;
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* ───────────────────────────── 読了の履歴 */
+.readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reading-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: calc(var(--radius-md) * 0.75);
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-800);
+}
+
+/* ───────────────────────────── レポート（Markdown）
+   デザインの対応表どおりに組む。罫線は引かない（--- は余白になる）。 */
+.md {
+  font-size: 16px;
+  line-height: 1.9;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 32px 0 12px;
+}
+.md h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 32px 0 10px;
+}
+/* ### は「章の見出し」。本文の見出しとは色で区別する */
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-accent-700);
+  margin: 24px 0 8px;
+}
+.md p {
+  margin: 0 0 14px;
+}
+.md ul,
+.md ol {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+.md li {
+  margin-bottom: 4px;
+}
+/* チェックリスト。印は出すが、押して切り替えるのは原文の役目 */
+.md li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -22px;
+}
+.md input[type='checkbox'] {
+  accent-color: var(--color-accent);
+  margin-right: 6px;
+}
+/* 引用は左ボーダーを付けない（この紙面は罫線で区切らない） */
+.md blockquote {
+  margin: 6px 0 18px 24px;
+  padding: 0;
+  border: 0;
+  font-style: italic;
+  color: var(--color-accent-2-800);
+}
+.md blockquote p {
+  margin-bottom: 6px;
+}
+.md code {
+  background: var(--color-neutral-200);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+  font-size: 0.88em;
+}
+.md pre {
+  overflow-x: auto;
+  background: var(--color-neutral-900);
+  color: var(--color-neutral-100);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+.md pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+.md del {
+  color: var(--color-neutral-700);
+}
+.md table {
+  border-collapse: collapse;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+.md th,
+.md td {
+  padding: 4px 12px 4px 0;
+  text-align: left;
+}
+.md th {
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-divider);
+}
+.md a {
+  color: var(--color-accent-700);
+}
+/* --- は区切りだが、罫は引かず余白だけにする */
+.md hr {
+  border: 0;
+  margin: 40px 0;
+}
+/* 引用の末尾などに出てくる「p.96」は、斜体にせず小さく添える */
+.md .page-ref {
+  font-size: 12px;
+  font-style: normal;
+  color: var(--color-neutral-700);
+  margin-left: 4px;
+}
+
+/* ───────────────────────────── 本を追加する画面 */
+.add-form {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 520px;
+}
+.add-form label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.add-row {
+  display: flex;
+  align-items: start;
+  gap: var(--space-2);
+}
+.add-row .input {
+  flex: 1;
+}
+/* ボタンが折り返すと、隣の入力欄まで一緒に伸びてしまう */
+.add-row .btn {
+  flex: none;
+  white-space: nowrap;
+}
+.found {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+}
+.hits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-2);
+}
+
+/* ───────────────────────────── 次に読む本（読了時のダイアログ） */
+.next-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  display: flex;
+  /* 画面が低いとき、中央寄せだと上が切れてスクロールでも戻れない */
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+.next {
+  margin: auto 0;
+}
+.next {
+  width: 880px;
+  max-width: 100%;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 36px 40px 28px;
+  display: grid;
+  gap: 26px;
+}
+.next-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.next-kicker {
+  font-size: 12px;
+  color: var(--color-accent-700);
+}
+.next-title {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 4px 0 0;
+  line-height: 1.3;
+}
+.next-conditions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.next-conditions h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+.basis-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-neutral-600);
+}
+.basis-toggle[aria-pressed='true'] {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.basis-toggle:disabled {
+  cursor: not-allowed;
+}
+.next-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.next-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.next-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.next-card-author {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+.next-card-reason {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.next-card-basis {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.next-card-actions {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.next-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.next-summary {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+  max-width: 60%;
+}
+.next-empty {
+  font-size: 14px;
+  color: var(--color-neutral-700);
+  padding: var(--space-4) 0;
+}
+
+
+/* ───────────────────────────── 表紙を手で入れる */
+.cover-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.cover-picker-btn {
+  font-size: 11px;
+  padding: 2px 6px;
+}

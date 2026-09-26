@@ -1,0 +1,10 @@
+# --- 実行に必要なもの ---
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+httpx            # Step 3: ISBN から本の情報を取りに行く
+python-multipart # 表紙画像のアップロードを受け取る
+Pillow           # 表紙画像を縮めてから保存する
+
+# --- 開発・テスト用 ---
+pytest

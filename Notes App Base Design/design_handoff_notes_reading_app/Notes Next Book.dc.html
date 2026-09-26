@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<script src="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/_ds_bundle.js"></script>
+<style>:root{--font-heading:"Source Serif 4","Noto Serif JP",serif;--font-body:"Source Serif 4","Noto Serif JP",serif}body{margin:0;background:var(--color-neutral-300);font-family:var(--font-body)}a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}.dv-turn{padding:48px 48px 40px;scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 24px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#201e1d;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font-size:15px;font-weight:600;color:#201e1d}.dv-opts{display:flex;flex-direction:column;gap:56px}.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.1);color:#201e1d;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--color-neutral-800)}.dv-opt:target .dv-oid{background:var(--color-accent);color:#fff}.dv-next{margin:28px 0 0;font-size:13px;color:var(--color-neutral-800)}</style>
+</helmet>
+<section class="dv-turn" id="t5">
+<div class="dv-thd"><a class="dv-tid" href="#t5">5</a><span class="dv-tname">次に読む本 — 読了したときに3冊を提案（3案）</span></div>
+<div style="max-width:780px;margin:0 0 36px;font-size:14px;line-height:1.75">
+<p style="margin:0">本を読了にした時点で表示します。根拠は「残した引用・メモ」「評価の高い本」「タグ・分野」の3つで、理由は一言だけ添えます。操作は「積読に追加」「興味なし」（次の候補に入れ替わり、以後の提案から外れます）「条件を変えて出し直す」です。3案とも実際に操作できます。違いは出し方で、<b>5a</b> はダイアログで一度だけ、<b>5b</b> は本の詳細に続けて表示、<b>5c</b> は1冊を読み終えた日の紙面として全画面で表示します。</p>
+</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="5a">
+<div class="dv-olabel"><a class="dv-oid" href="#5a">5a</a>ダイアログ — 読了ボタンの直後に一度だけ。評価を付けて、3冊を横に並べる</div>
+<div style="width:1200px;height:760px;border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;position:relative;display:grid;grid-template-columns:76px 340px minmax(0,1fr);background:var(--color-bg)">
+<div style="background:var(--color-surface)"></div>
+<div style="background:var(--color-neutral-100);padding:28px 24px;display:grid;grid-auto-rows:max-content;gap:18px"><div style="font-size:24px;font-weight:600">本棚</div><div style="height:34px;background:var(--color-neutral-200);border-radius:2px"></div><div style="height:52px;background:var(--color-neutral-200);border-radius:2px"></div><div style="height:52px;background:var(--color-neutral-200);border-radius:2px"></div></div>
+<div style="padding:48px 64px"><div style="font-size:32px;font-weight:600">暇と退屈の倫理学</div></div>
+<div style="position:absolute;inset:0;background:color-mix(in srgb,var(--color-neutral-900) 50%,transparent);display:grid;place-items:center">
+<div style="width:880px;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-lg);padding:36px 40px 28px;display:grid;gap:26px">
+<div style="display:flex;align-items:flex-end;gap:20px">
+<div style="flex:1;display:grid;gap:6px"><span style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">読了 · 23日間 · 引用・メモ 6件</span><span style="font-size:28px;font-weight:600;line-height:1.25">『暇と退屈の倫理学』を読み終えました</span></div>
+<div style="display:flex;gap:3px;font-size:24px"><sc-for list="{{ starsA }}" as="s" hint-placeholder-count="5"><i class="ph-duotone ph-star" onClick="{{ s.onClick }}" style="cursor:pointer;color:{{ s.c }}"></i></sc-for></div>
+</div>
+<div style="display:grid;gap:14px">
+<div style="display:flex;align-items:center;gap:12px"><span style="font-size:18px;font-weight:600;flex:1">次に読む本</span>
+<sc-for list="{{ a.bases }}" as="b" hint-placeholder-count="3"><span onClick="{{ b.onClick }}" style="font-size:12px;padding:4px 10px;border-radius:2px;cursor:pointer;display:flex;align-items:center;gap:4px;background:{{ b.bg }};color:{{ b.fg }}"><i class="{{ b.icon }}"></i>{{ b.label }}</span></sc-for>
+<div class="seg"><sc-for list="{{ a.dists }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:12px;padding:4px 10px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<button class="btn btn-ghost" onClick="{{ a.rerun }}" style="font-size:13px"><i class="ph-duotone ph-arrows-clockwise" style="font-size:16px"></i>出し直す</button>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+<sc-for list="{{ a.cards }}" as="c" hint-placeholder-count="3">
+<div style="display:grid;grid-template-columns:72px 1fr;gap:14px;align-content:start">
+<div style="height:104px;border-radius:2px;box-shadow:var(--shadow-sm);padding:6px;font-size:10px;font-weight:600;line-height:1.3;background:{{ c.cbg }};color:{{ c.cfg }}">{{ c.t }}</div>
+<div style="display:grid;gap:4px;align-content:start;min-width:0">
+<span style="font-size:15px;font-weight:600;line-height:1.35">{{ c.t }}</span>
+<span style="font-size:11px;color:var(--color-neutral-700)">{{ c.a }}</span>
+<span style="font-size:13px;line-height:1.6;margin-top:4px">{{ c.reason }}</span>
+<span style="font-size:10px;letter-spacing:0.04em;color:{{ c.bc }}">{{ c.basisLabel }}</span>
+</div>
+<div style="grid-column:1 / -1;display:flex;gap:6px">
+<sc-if value="{{ c.notAdded }}" hint-placeholder-val="{{ true }}"><button class="btn btn-secondary" onClick="{{ c.onAdd }}" style="font-size:12px;padding:6px 10px"><i class="ph-duotone ph-plus"></i>積読に追加</button><button class="btn btn-ghost" onClick="{{ c.onDismiss }}" style="font-size:12px;color:var(--color-neutral-700)">興味なし</button></sc-if>
+<sc-if value="{{ c.added }}" hint-placeholder-val="{{ false }}"><span class="tag tag-accent" style="display:flex;gap:4px"><i class="ph-duotone ph-check"></i>積読に追加しました</span><button class="btn btn-ghost" onClick="{{ c.onUndo }}" style="font-size:12px">取り消す</button></sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--color-neutral-700)">{{ a.note }}</span><div style="display:flex;gap:8px"><button class="btn btn-ghost">レポートを仕上げる</button><button class="btn btn-primary">閉じる</button></div></div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="5b">
+<div class="dv-olabel"><a class="dv-oid" href="#5b">5b</a>詳細に続けて — 読了した本の詳細ペインに「次の三冊」を差し込む。邪魔にならず、あとから見返せる</div>
+<div style="width:1200px;height:760px;border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:grid;grid-template-columns:76px 340px minmax(0,1fr);background:var(--color-bg)">
+<div style="background:var(--color-surface);padding:22px 0;display:flex;flex-direction:column;align-items:center;gap:18px;font-size:24px;color:var(--color-neutral-700)"><span style="font-size:24px;font-weight:600;color:var(--color-text)">N</span><i class="ph-duotone ph-books" style="color:var(--color-accent-700)"></i><i class="ph-duotone ph-quotes"></i><i class="ph-duotone ph-chart-line-up"></i></div>
+<div style="background:var(--color-neutral-100);padding:28px 18px;display:grid;grid-auto-rows:max-content;gap:20px">
+<div style="font-size:24px;font-weight:600;padding:0 6px">本棚</div>
+<div class="seg" style="display:flex"><span class="seg-opt" style="flex:1;justify-content:center;font-size:12px">読書中 2</span><span class="seg-opt" style="flex:1;justify-content:center;font-size:12px;background:var(--color-accent);color:var(--color-bg)">読了 6</span><span class="seg-opt" style="flex:1;justify-content:center;font-size:12px">積読 {{ b.tsundoku }}</span></div>
+<div style="display:grid;gap:2px">
+<div style="display:flex;gap:12px;padding:9px 8px;border-radius:2px;background:var(--color-accent-100)"><div style="width:36px;height:52px;background:var(--color-accent-200);box-shadow:var(--shadow-sm)"></div><div style="display:grid;gap:2px;align-content:start"><span style="font-size:14px;font-weight:600">暇と退屈の倫理学</span><span style="font-size:11px;color:var(--color-neutral-700)">國分功一郎 · ★★★★★</span></div></div>
+<div style="display:flex;gap:12px;padding:9px 8px"><div style="width:36px;height:52px;background:var(--color-neutral-300);box-shadow:var(--shadow-sm)"></div><div style="display:grid;gap:2px;align-content:start"><span style="font-size:14px;font-weight:600">こころ</span><span style="font-size:11px;color:var(--color-neutral-700)">夏目漱石 · ★★★★★</span></div></div>
+<div style="display:flex;gap:12px;padding:9px 8px"><div style="width:36px;height:52px;background:var(--color-neutral-200);box-shadow:var(--shadow-sm)"></div><div style="display:grid;gap:2px;align-content:start"><span style="font-size:14px;font-weight:600">三体</span><span style="font-size:11px;color:var(--color-neutral-700)">劉慈欣 · ★★★★★</span></div></div>
+</div>
+</div>
+<div style="overflow-y:auto;min-height:0">
+<div style="max-width:760px;padding:44px 64px 60px;display:grid;gap:30px">
+<div style="display:flex;gap:24px;align-items:flex-end">
+<div style="width:96px;height:140px;flex:none;border-radius:2px;box-shadow:var(--shadow-md);background:var(--color-accent-200)"></div>
+<div style="display:grid;gap:8px"><span class="tag tag-outline" style="justify-self:start">読了 · 9月25日</span><span style="font-size:30px;font-weight:600;line-height:1.2">暇と退屈の倫理学</span><span style="font-size:13px;color:var(--color-neutral-700)">國分功一郎 · 23日間 · 引用・メモ 6件</span></div>
+</div>
+<div style="display:grid;gap:18px">
+<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap"><span style="font-size:22px;font-weight:600;flex:1">次の三冊</span>
+<sc-for list="{{ b.bases }}" as="x" hint-placeholder-count="3"><span onClick="{{ x.onClick }}" style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px;text-decoration:{{ x.deco }};color:{{ x.fg2 }}"><i class="{{ x.icon }}"></i>{{ x.label }}</span></sc-for>
+<button class="btn btn-ghost" onClick="{{ b.rerun }}" style="font-size:13px"><i class="ph-duotone ph-arrows-clockwise" style="font-size:16px"></i>出し直す</button>
+</div>
+<div class="seg" style="justify-self:start"><sc-for list="{{ b.dists }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:12px;padding:5px 12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<div style="display:grid;gap:22px;margin-top:6px">
+<sc-for list="{{ b.cards }}" as="c" hint-placeholder-count="3">
+<div style="display:grid;grid-template-columns:40px 52px minmax(0,1fr) auto;gap:16px;align-items:start">
+<span style="font-size:36px;font-weight:600;line-height:1;color:var(--color-neutral-400)">{{ c.n }}</span>
+<div style="height:76px;border-radius:1px;box-shadow:var(--shadow-sm);background:{{ c.cbg }}"></div>
+<div style="display:grid;gap:3px;min-width:0">
+<span style="font-size:18px;font-weight:600;line-height:1.3">{{ c.t }}</span>
+<span style="font-size:12px;color:var(--color-neutral-700)">{{ c.a }} · {{ c.pub }}</span>
+<span style="font-size:14px;line-height:1.65;margin-top:4px"><span style="font-size:11px;letter-spacing:0.04em;color:{{ c.bc }}">{{ c.basisLabel }}</span>　{{ c.reason }}</span>
+</div>
+<div style="display:grid;gap:4px;justify-items:end">
+<sc-if value="{{ c.notAdded }}" hint-placeholder-val="{{ true }}"><button class="btn btn-secondary" onClick="{{ c.onAdd }}" style="font-size:12px;padding:6px 10px"><i class="ph-duotone ph-plus"></i>積読に追加</button><button class="btn btn-ghost" onClick="{{ c.onDismiss }}" style="font-size:12px;color:var(--color-neutral-700)">興味なし</button></sc-if>
+<sc-if value="{{ c.added }}" hint-placeholder-val="{{ false }}"><span class="tag tag-accent" style="display:flex;gap:4px"><i class="ph-duotone ph-check"></i>追加済み</span><button class="btn btn-ghost" onClick="{{ c.onUndo }}" style="font-size:12px">取り消す</button></sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+<span style="font-size:12px;color:var(--color-neutral-700)">{{ b.note }}</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="5c">
+<div class="dv-olabel"><a class="dv-oid" href="#5c">5c</a>読了号 — 読み終えた日の紙面。題字の下に残した引用、下段に「次の三冊」を三段組で</div>
+<div style="width:1200px;height:760px;border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;background:var(--color-bg);display:flex;flex-direction:column">
+<div style="padding:30px 72px 0;display:grid;gap:12px">
+<div style="display:flex;align-items:flex-end;gap:20px"><span style="font-size:56px;font-weight:600;line-height:1;letter-spacing:-0.02em;flex:1">読了</span><button class="btn btn-ghost"><i class="ph-duotone ph-x" style="font-size:18px"></i>本棚に戻る</button></div>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);padding:9px 0;display:flex;align-items:center;gap:22px;font-size:12px;color:var(--color-neutral-800)">
+<span>2026年9月25日 金曜日</span><span>今年 43冊目</span><span>23日間 · 320ページ</span>
+<div style="flex:1"></div>
+<span>提案の根拠</span>
+<sc-for list="{{ c.bases }}" as="x" hint-placeholder-count="3"><span onClick="{{ x.onClick }}" style="cursor:pointer;display:flex;align-items:center;gap:4px;text-decoration:{{ x.deco }};color:{{ x.fg2 }}"><i class="{{ x.icon }}"></i>{{ x.label }}</span></sc-for>
+</div>
+</div>
+<div style="padding:30px 72px 0;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:56px">
+<div style="display:grid;gap:10px;align-content:start"><span style="font-size:40px;font-weight:600;line-height:1.15">暇と退屈の倫理学</span><span style="font-size:13px;color:var(--color-neutral-700)">國分功一郎 · 新潮文庫</span><div style="display:flex;gap:3px;font-size:20px;margin-top:4px"><sc-for list="{{ starsC }}" as="s" hint-placeholder-count="5"><i class="ph-duotone ph-star" onClick="{{ s.onClick }}" style="cursor:pointer;color:{{ s.c }}"></i></sc-for></div></div>
+<div style="display:grid;gap:6px;align-content:start"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-accent-2-700)">いちばん残した言葉 · p.182</span><span style="font-size:21px;font-style:italic;line-height:1.65">「退屈と向き合うことは、自分の生活を取り戻すことでもある。」</span></div>
+</div>
+<div style="padding:36px 72px 0;display:flex;align-items:baseline;gap:16px"><span style="font-size:24px;font-weight:600;flex:1">次の三冊</span>
+<div class="seg"><sc-for list="{{ c.dists }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:12px;padding:4px 10px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<button class="btn btn-ghost" onClick="{{ c.rerun }}" style="font-size:13px"><i class="ph-duotone ph-arrows-clockwise" style="font-size:16px"></i>出し直す</button></div>
+<div style="padding:18px 72px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:48px">
+<sc-for list="{{ c.cards }}" as="k" hint-placeholder-count="3">
+<div style="display:grid;gap:8px;align-content:start">
+<div style="display:flex;gap:14px;align-items:flex-end">
+<div class="cmyk-num" style="font-size:64px;font-weight:600"><span class="paper">{{ k.n }}</span><span class="plate plate-c" aria-hidden="true">{{ k.n }}</span><span class="plate plate-m" aria-hidden="true">{{ k.n }}</span><span class="plate plate-y" aria-hidden="true">{{ k.n }}</span></div>
+<div style="width:44px;height:64px;border-radius:1px;box-shadow:var(--shadow-sm);background:{{ k.cbg }}"></div>
+</div>
+<span style="font-size:19px;font-weight:600;line-height:1.3;margin-top:4px">{{ k.t }}</span>
+<span style="font-size:12px;color:var(--color-neutral-700)">{{ k.a }} · {{ k.pub }}</span>
+<span style="font-size:14px;line-height:1.65">{{ k.reason }}</span>
+<span style="font-size:10px;letter-spacing:0.04em;color:{{ k.bc }}">{{ k.basisLabel }}</span>
+<div style="display:flex;gap:6px;margin-top:2px">
+<sc-if value="{{ k.notAdded }}" hint-placeholder-val="{{ true }}"><button class="btn btn-secondary" onClick="{{ k.onAdd }}" style="font-size:12px;padding:6px 10px"><i class="ph-duotone ph-plus"></i>積読に追加</button><button class="btn btn-ghost" onClick="{{ k.onDismiss }}" style="font-size:12px;color:var(--color-neutral-700)">興味なし</button></sc-if>
+<sc-if value="{{ k.added }}" hint-placeholder-val="{{ false }}"><span class="tag tag-accent" style="display:flex;gap:4px"><i class="ph-duotone ph-check"></i>積読に追加しました</span><button class="btn btn-ghost" onClick="{{ k.onUndo }}" style="font-size:12px">取り消す</button></sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="padding:18px 72px 0;font-size:12px;color:var(--color-neutral-700)">{{ c.note }}</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">次の候補：「<a class="dv-oid" href="#5b">5b</a> を Notes Web に統合する」 · 「<a class="dv-oid" href="#5a">5a</a> の興味なしで理由を選べるようにする」 · 「<a class="dv-oid" href="#5c">5c</a> のスマホ版」</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  POOL = [
+    { id: 'p1', t: '退屈とポスト・トゥルース', a: 'マーク・キングウェル', pub: '集英社新書', b: 'note', d: 'near', reason: 'p.182 の引用と同じ問いを、スマホ時代の退屈から考える。' },
+    { id: 'p2', t: '勉強の哲学', a: '千葉雅也', pub: '文春文庫', b: 'tag', d: 'near', reason: 'いちばん多く読んでいる #哲学 から、読みやすい一冊。' },
+    { id: 'p3', t: '夜と霧', a: 'V・E・フランクル', pub: 'みすず書房', b: 'rating', d: 'near', reason: '★5をつけた本と同じく「どう生きるか」を問う。' },
+    { id: 'p4', t: 'モモ', a: 'ミヒャエル・エンデ', pub: '岩波少年文庫', b: 'note', d: 'far', reason: 'メモ「目的を決めない時間」を、物語で描いた本。' },
+    { id: 'p5', t: 'ソラリス', a: 'スタニスワフ・レム', pub: 'ハヤカワ文庫SF', b: 'rating', d: 'far', reason: '★5の『三体』から、じっくり考えさせるSFへ。' },
+    { id: 'p6', t: 'ゾウの時間 ネズミの時間', a: '本川達雄', pub: '中公新書', b: 'tag', d: 'far', reason: '#哲学 から少し離れて、時間を生物学で考える。' },
+    { id: 'p7', t: '贈与論', a: 'マルセル・モース', pub: 'ちくま学芸文庫', b: 'note', d: 'near', reason: 'メモ「消費と浪費」の先にある、贈り物と交換の話。' },
+    { id: 'p8', t: 'はじめての哲学的思考', a: '苫野一徳', pub: 'ちくまプリマー新書', b: 'tag', d: 'near', reason: '#哲学 · 問いの立て方をもう一度整理できる入門書。' },
+    { id: 'p9', t: '君たちはどう生きるか', a: '吉野源三郎', pub: '岩波文庫', b: 'rating', d: 'near', reason: '★4以上をつけた本によく出てくる問いが中心にある。' },
+    { id: 'p10', t: '森の生活', a: 'ヘンリー・D・ソロー', pub: '岩波文庫', b: 'note', d: 'far', reason: '暇をつくる暮らしを、2年間試した記録。' }
+  ];
+  COV = [['var(--color-accent-200)', 'var(--color-accent-900)'], ['var(--color-accent-2-200)', 'var(--color-accent-2-900)'], ['var(--color-neutral-300)', 'var(--color-neutral-900)'], ['var(--color-accent-100)', 'var(--color-accent-900)'], ['var(--color-accent-2-100)', 'var(--color-accent-2-900)'], ['var(--color-accent-300)', 'var(--color-accent-900)']];
+  BL = { note: ['引用・メモから', 'ph-quotes'], rating: ['評価から', 'ph-star'], tag: ['分野から', 'ph-tag'] };
+  mk() { return { bases: ['note', 'rating', 'tag'], dist: 'both', off: 0, dis: [], add: [] }; }
+  state = { a: this.mk(), b: this.mk(), c: this.mk(), rateA: 5, rateC: 5 };
+  opt(k) {
+    const s = this.state[k], up = p => this.setState(st => ({ [k]: { ...st[k], ...p(st[k]) } }));
+    const pool = this.POOL.filter(p => s.bases.includes(p.b) && (s.dist === 'both' || p.d === s.dist) && !s.dis.includes(p.id));
+    const n = pool.length, start = n ? s.off % n : 0;
+    const picks = pool.slice(start).concat(pool.slice(0, start)).slice(0, 3);
+    const cards = picks.map((p, i) => {
+      const cv = this.COV[this.POOL.indexOf(p) % this.COV.length], added = s.add.includes(p.id);
+      return { ...p, n: String(i + 1), cbg: cv[0], cfg: cv[1], basisLabel: this.BL[p.b][0], bc: p.b === 'note' ? 'var(--color-accent-2-700)' : 'var(--color-accent-700)', added, notAdded: !added,
+        onAdd: () => up(x => ({ add: [...x.add, p.id] })), onUndo: () => up(x => ({ add: x.add.filter(i => i !== p.id) })), onDismiss: () => up(x => ({ dis: [...x.dis, p.id], add: x.add.filter(i => i !== p.id) })) };
+    });
+    const bases = ['note', 'rating', 'tag'].map(b => { const on = s.bases.includes(b); return { label: this.BL[b][0], icon: 'ph-duotone ' + this.BL[b][1], bg: on ? 'var(--color-accent-100)' : 'transparent', fg: on ? 'var(--color-accent-800)' : 'var(--color-neutral-600)', fg2: on ? 'var(--color-accent-700)' : 'var(--color-neutral-500)', deco: on ? 'none' : 'line-through',
+      onClick: () => up(x => { const nb = on ? x.bases.filter(v => v !== b) : [...x.bases, b]; return nb.length ? { bases: nb, off: 0 } : {}; }) }; });
+    const dists = [['near', '近い本'], ['far', '少し離れた本'], ['both', '両方']].map(([v, l]) => ({ label: l, bg: s.dist === v ? 'var(--color-accent)' : 'transparent', fg: s.dist === v ? 'var(--color-bg)' : 'inherit', onClick: () => up(() => ({ dist: v, off: 0 })) }));
+    const note = s.dis.length ? `興味なし ${s.dis.length}件 — 似た本は次から出しません` : cards.length < 3 ? '条件に合う候補が少なくなりました。根拠を増やしてください' : '引用・メモ6件、★5の本2冊、よく読む分野 #哲学 から選んでいます';
+    return { cards, bases, dists, note, tsundoku: String(3 + s.add.length), rerun: () => up(x => ({ off: x.off + 3 })) };
+  }
+  renderVals() {
+    const stars = key => [1, 2, 3, 4, 5].map(i => ({ c: i <= this.state[key] ? 'var(--color-accent)' : 'var(--color-neutral-400)', onClick: () => this.setState({ [key]: i }) }));
+    return { a: this.opt('a'), b: this.opt('b'), c: this.opt('c'), starsA: stars('rateA'), starsC: stars('rateC') };
+  }
+}
+</script>
+</body>
+</html>

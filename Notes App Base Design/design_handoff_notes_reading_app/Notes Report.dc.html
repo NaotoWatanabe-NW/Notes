@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<script src="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/_ds_bundle.js"></script>
+<style>:root{--font-heading:"Source Serif 4","Noto Serif JP",serif;--font-body:"Source Serif 4","Noto Serif JP",serif}body{margin:0;background:var(--color-neutral-300);font-family:var(--font-body)}a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}[contenteditable]:focus-visible{outline:none}.dv-turn{padding:48px 48px 40px;scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 24px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#201e1d;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font-size:15px;font-weight:600;color:#201e1d}.dv-opts{display:flex;flex-direction:column;gap:56px}.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.1);color:#201e1d;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--color-neutral-800)}.dv-opt:target .dv-oid{background:var(--color-accent);color:#fff}.dv-next{margin:28px 0 0;font-size:13px;color:var(--color-neutral-800)}</style>
+</helmet>
+<section class="dv-turn" id="t6">
+<div class="dv-thd"><a class="dv-tid" href="#t6">6</a><span class="dv-tname">Markdownエディタ — 左で書き、右にプレビュー</span></div>
+<div style="max-width:780px;margin:0 0 36px;font-size:14px;line-height:1.75">
+<p style="margin:0">土台は <a class="dv-oid" href="#4a">4a</a> です。左のMarkdownを、右に <a class="dv-oid" href="#3c">3c</a> の紙面の組みで表示します。右側はスクロール位置が左に連動します。メモ窓とツールバーからは、Markdownがカーソル位置に挿入されます（引用は <code>&gt; 「…」 p.96</code>）。表示は右上で「並べる／書く／読む」を切り替えられます。</p>
+</div>
+<div class="dv-opts">
+<div class="dv-opt" id="6a">
+<div class="dv-olabel"><a class="dv-oid" href="#6a">6a</a>2ペイン — 左はMarkdown原文（セリフ体）、右は紙面プレビュー</div>
+<div ref="{{ m.frame }}" style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column;position:relative">
+<div style="height:56px;flex:none;display:flex;align-items:center;gap:4px;padding:0 20px">
+<button class="btn btn-ghost"><i class="ph-duotone ph-arrow-left" style="font-size:18px"></i>本に戻る</button>
+<span style="font-size:14px;font-weight:600;margin:0 16px 0 8px">暇と退屈の倫理学</span>
+<sc-for list="{{ m.tools }}" as="t" hint-placeholder-count="7"><button class="btn btn-ghost" onMouseDown="{{ t.onDown }}" title="{{ t.title }}" style="padding:6px 9px;font-size:13px"><i class="{{ t.icon }}" style="font-size:18px"></i>{{ t.label }}</button></sc-for>
+<div style="flex:1"></div>
+<span style="font-size:12px;color:var(--color-neutral-700);margin-right:12px">{{ m.chars }}字 · 自動保存済み</span>
+<button class="btn btn-ghost" onClick="{{ m.toggleFw }}" style="font-size:13px"><i class="ph-duotone ph-cards" style="font-size:17px"></i>メモ窓</button>
+<div class="seg"><sc-for list="{{ m.views }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:12px;padding:5px 12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+</div>
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:{{ m.cols }}">
+<sc-if value="{{ m.showEd }}" hint-placeholder-val="{{ true }}">
+<div style="background:var(--color-neutral-100);min-height:0;display:flex">
+<textarea ref="{{ m.ta }}" value="{{ m.md }}" onChange="{{ m.onMd }}" onScroll="{{ m.onScroll }}" spellCheck="{{ false }}" style="flex:1;border:0;resize:none;background:transparent;padding:36px 48px 120px;font-family:var(--font-body);font-size:16px;line-height:1.9;color:var(--color-text);caret-color:var(--color-accent);outline:none;tab-size:2"></textarea>
+</div>
+</sc-if>
+<sc-if value="{{ m.showPv }}" hint-placeholder-val="{{ true }}">
+<div ref="{{ m.pv }}" style="overflow-y:auto;min-height:0">
+<div style="max-width:{{ m.pvMax }};margin:0 auto;padding:36px 56px 120px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700);margin-bottom:8px">読書レポート</div>
+<div style="font-size:40px;font-weight:600;line-height:1.1;letter-spacing:-0.02em">暇と退屈の倫理学</div>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);margin:14px 0 8px;padding:9px 0;display:flex;gap:18px;font-size:12px;color:var(--color-neutral-800)"><span>國分功一郎</span><span>p.182 / 320</span><span>★★★★★</span><span style="color:var(--color-accent-700)">人にすすめたい</span></div>
+<div ref="{{ m.out }}"></div>
+</div>
+</div>
+</sc-if>
+</div>
+<sc-if value="{{ m.fwOpen }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:{{ m.fwX }};top:{{ m.fwY }};width:320px;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-lg);overflow:hidden;z-index:5">
+<div onMouseDown="{{ m.drag }}" style="display:flex;align-items:center;gap:8px;padding:10px 10px 10px 14px;background:var(--color-surface);cursor:grab;user-select:none">
+<i class="ph-duotone ph-dots-six-vertical" style="font-size:16px;color:var(--color-neutral-600)"></i>
+<div class="seg" onMouseDown="{{ stop }}" style="flex:1"><sc-for list="{{ m.fwTabs }}" as="o" hint-placeholder-count="2"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:12px;padding:4px 10px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+<button class="btn btn-icon btn-ghost" onClick="{{ m.toggleFw }}" onMouseDown="{{ stop }}" style="width:28px;height:28px"><i class="ph-duotone ph-x" style="font-size:16px"></i></button>
+</div>
+<sc-if value="{{ m.isSyntax }}" hint-placeholder-val="{{ false }}">
+<div style="max-height:340px;overflow-y:auto;padding:6px;display:grid;gap:1px">
+<sc-for list="{{ m.syntax }}" as="x" hint-placeholder-count="8">
+<div onMouseDown="{{ x.onDown }}" style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:12px;align-items:baseline;padding:8px 10px;border-radius:2px;cursor:copy" style-hover="background:var(--color-accent-100)">
+<code style="font-family:var(--font-body);font-size:13px;color:var(--color-neutral-800);white-space:pre">{{ x.code }}</code>
+<span style="font-size:{{ x.fz }};font-weight:{{ x.fw }};font-style:{{ x.fs }};color:{{ x.fg }};line-height:1.4">{{ x.label }}</span>
+</div>
+</sc-for>
+</div>
+<div style="padding:8px 14px;background:var(--color-surface);font-size:11px;color:var(--color-neutral-700)">クリックで挿入 · 太字・斜体は選択範囲を囲む</div>
+</sc-if>
+<sc-if value="{{ m.isNotes }}" hint-placeholder-val="{{ true }}">
+<div style="max-height:300px;overflow-y:auto;padding:6px;display:grid;gap:2px">
+<sc-for list="{{ m.notes }}" as="n" hint-placeholder-count="4">
+<div onMouseDown="{{ n.onDown }}" style="display:grid;gap:3px;padding:10px;border-radius:2px;cursor:copy" style-hover="background:var(--color-accent-100)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kind }} · p.{{ n.p }}</span>
+<span style="font-size:14px;line-height:1.6;font-style:{{ n.fs }}">{{ n.display }}</span>
+</div>
+</sc-for>
+</div>
+<div style="padding:8px 14px;background:var(--color-surface);font-size:11px;color:var(--color-neutral-700)">クリックでMarkdownを挿入</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</section>
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">メモを見ながら書く — PCはフローティングウィンドウ、スマホは3案</span></div>
+<div style="max-width:760px;margin:0 0 36px;font-size:14px;line-height:1.75">
+<p style="margin:0">土台は <a class="dv-oid" href="#3c">3c</a> です。PCではメモ窓をドラッグで動かしたり、小さくしたりできます。スマホは、メモを一時的に見てすぐ本文に戻る方法を3案作りました。<b>4b</b> はハーフシート、<b>4c</b> は押している間だけ表示、<b>4d</b> はキーボードと入れ替えです。どの案もメモをタップ（4cは指を離す）すると、本文のカーソル位置に挿入されます。</p>
+</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="4a">
+<div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>PC — フローティングのメモ窓。見出しをドラッグで移動、— で小さくする、クリックで挿入</div>
+<div ref="{{ refFrame }}" style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:grid;grid-template-columns:240px minmax(0,1fr);position:relative">
+<div style="padding:28px 18px;display:grid;grid-auto-rows:max-content;gap:22px;background:var(--color-neutral-100);overflow-y:auto;min-height:0">
+<button class="btn btn-ghost" style="justify-self:start"><i class="ph-duotone ph-arrow-left" style="font-size:18px"></i>本に戻る</button>
+<div style="display:grid;gap:2px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-bottom:6px;padding:0 8px">アウトライン</div>
+<sc-for list="{{ outline4 }}" as="o" hint-placeholder-count="6">
+<div onClick="{{ o.onClick }}" style="padding:5px 8px;border-radius:2px;cursor:pointer;line-height:1.4;padding-left:{{ o.pad }};font-size:{{ o.fz }};font-weight:{{ o.fw }};color:{{ o.fg }}" style-hover="background:var(--color-neutral-200)">{{ o.text }}</div>
+</sc-for>
+</div>
+<button class="btn btn-secondary" onClick="{{ toggleFw }}" style="justify-self:start"><i class="ph-duotone ph-cards" style="font-size:17px"></i>{{ fwBtn }}</button>
+</div>
+<div data-scroll="p" style="overflow-y:auto;min-height:0;position:relative">
+<div style="max-width:680px;padding:36px 56px 100px">
+<div style="font-size:44px;font-weight:600;line-height:1.1;letter-spacing:-0.02em">暇と退屈の倫理学</div>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);margin-top:14px;padding:9px 0;display:flex;gap:18px;font-size:12px;color:var(--color-neutral-800)"><span>國分功一郎</span><span>書き始め 9月3日</span><span>p.182 / 320</span><span>{{ charsP }}字</span></div>
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ refP }}" onInput="{{ countP }}" style="font-size:17px;line-height:1.95;margin-top:8px;caret-color:var(--color-accent)">
+<h3 style="font-size:22px;font-weight:600;margin:28px 0 10px;line-height:1.3">要約</h3>
+<p style="margin:0 0 14px;font-size:20px;line-height:1.8">人はなぜ退屈するのか、退屈とどう向き合えばいいのかを、哲学・経済史・人類学をまたいで考える本。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">章ごとのメモ</h3>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第一章 暇と退屈の原理論 · p.21</h4>
+<p style="margin:0 0 14px">パスカルの話が出発点。気晴らしは、欲しいものそのものより、追いかける過程を求めているという整理がわかりやすい。</p>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第四章 暇と退屈の疎外論 · p.165</h4>
+<p style="margin:0 0 14px">消費と浪費の区別が出てきたところ。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">感想</h3>
+<p style="margin:0 0 14px">退屈を「なくすべきもの」ではなく、生活の組み立て方の問題として扱っているのが新鮮だった。</p>
+</div>
+</div>
+</div>
+
+<sc-if value="{{ fwOpen }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:{{ fwX }};top:{{ fwY }};width:340px;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;z-index:5">
+<div onMouseDown="{{ dragStart }}" style="display:flex;align-items:center;gap:8px;padding:10px 10px 10px 14px;background:var(--color-surface);cursor:grab;user-select:none">
+<i class="ph-duotone ph-dots-six-vertical" style="font-size:16px;color:var(--color-neutral-600)"></i>
+<span style="flex:1;font-size:14px;font-weight:600">メモ・引用 <span style="font-weight:400;color:var(--color-neutral-700)">{{ fwCount }}</span></span>
+<button class="btn btn-icon btn-ghost" onClick="{{ toggleMin }}" onMouseDown="{{ stop }}" title="小さくする" style="width:28px;height:28px"><i class="{{ minIcon }}" style="font-size:16px"></i></button>
+<button class="btn btn-icon btn-ghost" onClick="{{ toggleFw }}" onMouseDown="{{ stop }}" title="閉じる" style="width:28px;height:28px"><i class="ph-duotone ph-x" style="font-size:16px"></i></button>
+</div>
+<sc-if value="{{ fwExpanded }}" hint-placeholder-val="{{ true }}">
+<div style="padding:12px 14px 6px"><div class="seg" style="display:flex"><sc-for list="{{ fwTabs }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="flex:1;justify-content:center;font-size:12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div></div>
+<div style="max-height:360px;overflow-y:auto;padding:4px 6px 10px;display:grid;gap:2px">
+<sc-for list="{{ fwNotes }}" as="n" hint-placeholder-count="4">
+<div onMouseDown="{{ n.onDown }}" style="display:grid;gap:3px;padding:10px;border-radius:2px;cursor:copy" style-hover="background:var(--color-accent-100)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kind }} · p.{{ n.p }}</span>
+<span style="font-size:14px;line-height:1.65;font-style:{{ n.fs }}">{{ n.display }}</span>
+</div>
+</sc-for>
+</div>
+<div style="padding:8px 14px;background:var(--color-surface);font-size:11px;color:var(--color-neutral-700)">クリックでカーソル位置に挿入</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</div>
+
+<div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+
+<div class="dv-opt" id="4b">
+<div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a>ハーフシート — 本文を上に残して下半分だけ出す。下へスワイプ（タップ）で戻る</div>
+<div style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;border:10px solid var(--color-text);overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:16px 30px 0;font-size:14px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;font-size:15px"><i class="ph-duotone ph-cell-signal-full"></i><i class="ph-duotone ph-wifi-high"></i><i class="ph-duotone ph-battery-full"></i></span></div>
+<div style="display:flex;align-items:center;gap:8px;padding:12px 16px 0"><i class="ph-duotone ph-caret-left" style="font-size:22px;color:var(--color-accent)"></i><span style="flex:1;font-size:13px;color:var(--color-neutral-700)">暇と退屈の倫理学 · {{ charsM1 }}字</span><button class="btn btn-ghost" style="font-size:14px">完了</button></div>
+<div style="flex:1;overflow-y:auto;min-height:0;padding:12px 24px 24px">
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ refM1 }}" onInput="{{ countM }}" style="font-size:16px;line-height:1.9;caret-color:var(--color-accent)">
+<h3 style="font-size:20px;font-weight:600;margin:8px 0 8px;line-height:1.3">要約</h3>
+<p style="margin:0 0 12px">人はなぜ退屈するのか、退屈とどう向き合えばいいのかを考える本。</p>
+<h3 style="font-size:20px;font-weight:600;margin:24px 0 8px;line-height:1.3">感想</h3>
+<p style="margin:0 0 12px">退屈を生活の組み立て方の問題として扱っているのが新鮮だった。</p>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:6px;padding:8px 14px 30px;background:var(--color-bg);box-shadow:0 -1px 8px color-mix(in srgb,#2d2b2b 8%,transparent)">
+<button class="btn btn-primary" onClick="{{ openSheet }}" style="border-radius:20px;padding:9px 16px"><i class="ph-duotone ph-cards" style="font-size:18px"></i>メモ</button>
+<button class="btn btn-ghost" onMouseDown="{{ headM1 }}"><i class="ph-duotone ph-text-h" style="font-size:20px"></i></button>
+<button class="btn btn-ghost" onMouseDown="{{ chapM1 }}"><i class="ph-duotone ph-bookmark-simple" style="font-size:18px"></i>p.182</button>
+</div>
+<sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:color-mix(in srgb,var(--color-neutral-900) 18%,transparent)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:{{ sheetH }};background:var(--color-bg);border-radius:14px 14px 0 0;box-shadow:var(--shadow-lg);display:flex;flex-direction:column">
+<div onClick="{{ toggleSheetSize }}" style="padding:10px 0 4px;display:flex;justify-content:center;cursor:pointer"><div style="width:36px;height:5px;border-radius:3px;background:var(--color-neutral-400)"></div></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 20px 10px"><span style="font-size:17px;font-weight:600">メモ・引用</span><div class="seg"><sc-for list="{{ fwTabs }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:12px;padding:5px 10px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div></div>
+<div style="flex:1;overflow-y:auto;padding:0 10px 30px;display:grid;grid-auto-rows:max-content;gap:2px">
+<sc-for list="{{ sheetNotes }}" as="n" hint-placeholder-count="4">
+<div onMouseDown="{{ n.onDown }}" style="display:grid;gap:3px;padding:12px 10px;border-radius:2px;cursor:pointer" style-hover="background:var(--color-accent-100)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kind }} · p.{{ n.p }}</span>
+<span style="font-size:15px;line-height:1.65;font-style:{{ n.fs }}">{{ n.display }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+
+<div class="dv-opt" id="4c">
+<div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a>長押しピーク — 押している間だけ本文の上に表示。指をメモの上で離すと挿入</div>
+<div style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;border:10px solid var(--color-text);overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:16px 30px 0;font-size:14px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;font-size:15px"><i class="ph-duotone ph-cell-signal-full"></i><i class="ph-duotone ph-wifi-high"></i><i class="ph-duotone ph-battery-full"></i></span></div>
+<div style="display:flex;align-items:center;gap:8px;padding:12px 16px 0"><i class="ph-duotone ph-caret-left" style="font-size:22px;color:var(--color-accent)"></i><span style="flex:1;font-size:13px;color:var(--color-neutral-700)">暇と退屈の倫理学 · {{ charsM2 }}字</span><button class="btn btn-ghost" style="font-size:14px">完了</button></div>
+<div style="flex:1;overflow-y:auto;min-height:0;padding:12px 24px 16px;position:relative">
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ refM2 }}" onInput="{{ countM }}" style="font-size:16px;line-height:1.9;caret-color:var(--color-accent)">
+<h3 style="font-size:20px;font-weight:600;margin:8px 0 8px;line-height:1.3">章ごとのメモ</h3>
+<h4 style="font-size:15px;font-weight:600;margin:14px 0 4px;color:var(--color-accent-700)">第四章 暇と退屈の疎外論 · p.165</h4>
+<p style="margin:0 0 12px">消費と浪費の区別が出てきたところ。</p>
+</div>
+</div>
+<sc-if value="{{ peekOn }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:12px;right:12px;top:96px;bottom:318px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;z-index:4">
+<div style="padding:12px 16px 6px;display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:15px;font-weight:600">メモ・引用</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ peekHint }}</span></div>
+<div style="flex:1;overflow-y:auto;padding:0 6px 8px;display:grid;grid-auto-rows:max-content;gap:2px">
+<sc-for list="{{ peekNotes }}" as="n" hint-placeholder-count="4">
+<div onPointerUp="{{ n.onUp }}" onClick="{{ n.onClickPinned }}" style="display:grid;gap:3px;padding:10px;border-radius:2px;cursor:pointer" style-hover="background:var(--color-accent-100)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kind }} · p.{{ n.p }}</span>
+<span style="font-size:14px;line-height:1.6;font-style:{{ n.fs }}">{{ n.display }}</span>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ peekPinned }}" hint-placeholder-val="{{ false }}"><button class="btn btn-secondary" onClick="{{ unpin }}" style="margin:0 12px 12px">閉じて本文に戻る</button></sc-if>
+</div>
+</sc-if>
+<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--color-neutral-200)">
+<button onPointerDown="{{ peekDown }}" onDoubleClick="{{ pin }}" style="display:flex;align-items:center;gap:6px;border:0;font:inherit;font-size:13px;padding:7px 14px;border-radius:16px;cursor:pointer;touch-action:none;user-select:none;background:{{ peekBtnBg }};color:{{ peekBtnFg }}"><i class="ph-duotone ph-hand-pointing" style="font-size:17px"></i>押してメモ</button>
+<span style="font-size:10px;color:var(--color-neutral-700)">ダブルタップで固定</span>
+<div style="flex:1"></div>
+<i class="ph-duotone ph-text-h" style="font-size:20px;color:var(--color-accent);padding:0 6px"></i>
+</div>
+<div style="height:260px;flex:none;background:var(--color-neutral-300);padding:8px 5px 34px;display:grid;grid-template-columns:1fr 1.25fr 1.25fr 1.25fr 1fr;grid-template-rows:repeat(4,1fr);gap:6px">
+<sc-for list="{{ kbKeys }}" as="k" hint-placeholder-count="20"><div style="display:flex;align-items:center;justify-content:center;border-radius:5px;box-shadow:0 1px 0 var(--color-neutral-500);font-size:{{ k.fz }};grid-row:{{ k.row }};grid-column:{{ k.col }};background:{{ k.bg }}">{{ k.l }}</div></sc-for>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="4d">
+<div class="dv-olabel"><a class="dv-oid" href="#4d">4d</a>キーボードと入れ替え — 絵文字キーボードのようにメモ面へ切り替え。本文とカーソルは動かない</div>
+<div style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;border:10px solid var(--color-text);overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:16px 30px 0;font-size:14px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;font-size:15px"><i class="ph-duotone ph-cell-signal-full"></i><i class="ph-duotone ph-wifi-high"></i><i class="ph-duotone ph-battery-full"></i></span></div>
+<div style="display:flex;align-items:center;gap:8px;padding:12px 16px 0"><i class="ph-duotone ph-caret-left" style="font-size:22px;color:var(--color-accent)"></i><span style="flex:1;font-size:13px;color:var(--color-neutral-700)">暇と退屈の倫理学 · {{ charsM3 }}字</span><button class="btn btn-ghost" style="font-size:14px">完了</button></div>
+<div style="flex:1;overflow-y:auto;min-height:0;padding:12px 24px 16px">
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ refM3 }}" onInput="{{ countM }}" style="font-size:16px;line-height:1.9;caret-color:var(--color-accent)">
+<h3 style="font-size:20px;font-weight:600;margin:8px 0 8px;line-height:1.3">感想</h3>
+<p style="margin:0 0 12px">退屈を「なくすべきもの」ではなく、生活の組み立て方の問題として扱っているのが新鮮だった。</p>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--color-neutral-200)">
+<sc-for list="{{ kbTabs }}" as="t" hint-placeholder-count="2"><button onMouseDown="{{ t.onDown }}" style="display:flex;align-items:center;gap:5px;border:0;font:inherit;font-size:13px;padding:7px 12px;border-radius:16px;cursor:pointer;background:{{ t.bg }};color:{{ t.fg }}"><i class="{{ t.icon }}" style="font-size:17px"></i>{{ t.label }}</button></sc-for>
+<div style="flex:1"></div>
+<i class="ph-duotone ph-text-h" style="font-size:20px;color:var(--color-accent);padding:0 6px"></i>
+</div>
+<sc-if value="{{ kbIsKeys }}" hint-placeholder-val="{{ true }}">
+<div style="height:260px;flex:none;background:var(--color-neutral-300);padding:8px 5px 34px;display:grid;grid-template-columns:1fr 1.25fr 1.25fr 1.25fr 1fr;grid-template-rows:repeat(4,1fr);gap:6px">
+<sc-for list="{{ kbKeys }}" as="k" hint-placeholder-count="20"><div style="display:flex;align-items:center;justify-content:center;border-radius:5px;box-shadow:0 1px 0 var(--color-neutral-500);font-size:{{ k.fz }};grid-row:{{ k.row }};grid-column:{{ k.col }};background:{{ k.bg }}">{{ k.l }}</div></sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ kbIsMemos }}" hint-placeholder-val="{{ false }}">
+<div style="height:260px;flex:none;background:var(--color-surface);display:flex;flex-direction:column">
+<div style="flex:1;overflow-y:auto;padding:6px 6px 0;display:grid;grid-auto-rows:max-content;gap:2px">
+<sc-for list="{{ kbNotes }}" as="n" hint-placeholder-count="4">
+<div onMouseDown="{{ n.onDown }}" style="display:grid;gap:2px;padding:9px 10px;border-radius:2px;cursor:pointer" style-hover="background:var(--color-accent-100)">
+<span style="font-size:10px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kind }} · p.{{ n.p }}</span>
+<span style="font-size:13px;line-height:1.55;font-style:{{ n.fs }}">{{ n.display }}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;justify-content:center;gap:4px;padding:6px 0 30px"><sc-for list="{{ kbFilter }}" as="o" hint-placeholder-count="3"><span onMouseDown="{{ o.onDown }}" style="font-size:11px;padding:3px 10px;border-radius:10px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+</div>
+</sc-if>
+</div>
+</div>
+
+</div>
+</div>
+<p class="dv-next">次の候補：「<a class="dv-oid" href="#4a">4a</a> のメモ窓を画面端に吸着させる」 · 「<a class="dv-oid" href="#4b">4b</a> と <a class="dv-oid" href="#4d">4d</a> を組み合わせる（キーボード表示中は4d、非表示中は4b）」 · 「スマホ版の執筆モード全体を作る」</p>
+</section>
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">読書レポート — 全画面の執筆モード 3案</span></div>
+<div style="max-width:760px;margin:0 0 36px;font-size:14px;line-height:1.75">
+<p style="margin:0">1冊ごとに、読みながら書き足していく長文です。見出しは決まっておらず、要約・感想・学び・章メモの見出しはワンクリックで挿入できます。評価とおすすめ度は本文の外に置いています。3案とも本文はそのまま入力できます。見出しや引用の挿入、文字数、<b>3c</b> のアウトラインも実際に動きます。</p>
+</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3a">
+<div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>集中 — 一段組と下部の挿入バーだけ。書くこと以外を消す</div>
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column;position:relative">
+<div style="height:56px;flex:none;display:flex;align-items:center;gap:16px;padding:0 28px">
+<button class="btn btn-ghost"><i class="ph-duotone ph-arrow-left" style="font-size:18px"></i>本に戻る</button>
+<div style="flex:1"></div>
+<span style="font-size:12px;color:var(--color-neutral-700)">自動保存済み · {{ charsA }}字</span>
+<button class="btn btn-secondary">閉じる</button>
+</div>
+<div style="flex:1;overflow-y:auto;min-height:0">
+<div style="max-width:680px;margin:0 auto;padding:28px 0 140px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">読書レポート · 読書中 p.182 / 320</div>
+<div style="font-size:40px;font-weight:600;line-height:1.2;margin:8px 0 6px">暇と退屈の倫理学</div>
+<div style="font-size:14px;color:var(--color-neutral-700)">國分功一郎 · 新潮文庫</div>
+<div style="display:flex;align-items:center;gap:20px;margin:22px 0 8px">
+<div style="display:flex;gap:3px;font-size:22px"><sc-for list="{{ starsA }}" as="s" hint-placeholder-count="5"><i class="ph-duotone ph-star" onClick="{{ s.onClick }}" style="cursor:pointer;color:{{ s.c }}"></i></sc-for></div>
+<div class="seg"><sc-for list="{{ recA }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="font-size:12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+</div>
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ refA }}" onInput="{{ countA }}" style="font-size:17px;line-height:1.95;margin-top:16px;caret-color:var(--color-accent)">
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">要約</h3>
+<p style="margin:0 0 14px">人はなぜ退屈するのか、退屈とどう向き合えばいいのかを、哲学・経済史・人類学をまたいで考える本。序章で「好きなこと」とは何かという問いが立てられ、そこから暇と退屈を分けて考える流れになる。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">章ごとのメモ</h3>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第一章 暇と退屈の原理論 · p.21</h4>
+<p style="margin:0 0 14px">パスカルの「部屋でじっとしていられない」話が出発点。気晴らしは、欲しいものそのものより、追いかける過程を求めているという整理がわかりやすい。</p>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第二章 暇と退屈の系譜学 · p.75</h4>
+<p style="margin:0 0 14px">定住によって暇が生まれた、という見方。遊動生活との比較で、退屈が人類史の中では比較的新しい問題だとわかる。</p>
+<blockquote style="margin:6px 0 18px 24px;font-style:italic;color:var(--color-accent-2-800)">「人は楽しみを求めているのではなく、興奮を求めている。」 <span style="font-style:normal;font-size:12px;color:var(--color-neutral-700)">p.96</span></blockquote>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">感想</h3>
+<p style="margin:0 0 14px">退屈を「なくすべきもの」ではなく、生活の組み立て方の問題として扱っているのが新鮮だった。週末に予定を詰め込みがちなのは、退屈を避けたいからかもしれない。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">行動に移すこと</h3>
+<ul style="margin:0 0 14px;padding-left:1.4em"><li>週末に1つだけ、目的を決めない時間をつくる</li><li>読み終えたら序章の問いに自分の答えを書く</li></ul>
+</div>
+</div>
+</div>
+<div style="position:absolute;left:50%;bottom:24px;transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-lg)">
+<span style="font-size:11px;color:var(--color-neutral-700);padding:0 8px">見出しを挿入</span>
+<sc-for list="{{ chipsA }}" as="c" hint-placeholder-count="4"><button class="btn btn-ghost" onMouseDown="{{ c.onDown }}" style="font-size:13px;padding:6px 10px">{{ c.label }}</button></sc-for>
+<span style="width:1px;height:20px;background:var(--color-divider);margin:0 6px"></span>
+<button class="btn btn-ghost" onMouseDown="{{ chapA }}" style="font-size:13px;padding:6px 10px"><i class="ph-duotone ph-bookmark-simple"></i>いまのページ p.182</button>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="3b">
+<div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>資料つき — 右にこの本のメモ・引用と章。クリックで本文に差し込む</div>
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr) 360px">
+<div style="display:flex;flex-direction:column;min-height:0">
+<div style="height:56px;flex:none;display:flex;align-items:center;gap:6px;padding:0 28px">
+<button class="btn btn-ghost"><i class="ph-duotone ph-arrow-left" style="font-size:18px"></i>本に戻る</button>
+<div style="flex:1"></div>
+<sc-for list="{{ chipsB }}" as="c" hint-placeholder-count="4"><button class="btn btn-secondary" onMouseDown="{{ c.onDown }}" style="font-size:12px;padding:5px 10px">＋ {{ c.label }}</button></sc-for>
+</div>
+<div style="flex:1;overflow-y:auto;min-height:0">
+<div style="max-width:620px;padding:24px 56px 80px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">読書レポート · {{ charsB }}字</div>
+<div style="font-size:34px;font-weight:600;line-height:1.2;margin:8px 0 4px">暇と退屈の倫理学</div>
+<div style="font-size:13px;color:var(--color-neutral-700)">國分功一郎 · 新潮文庫 · p.182 / 320</div>
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ refB }}" onInput="{{ countB }}" style="font-size:17px;line-height:1.95;margin-top:20px;caret-color:var(--color-accent)">
+<h3 style="font-size:22px;font-weight:600;margin:28px 0 10px;line-height:1.3">要約</h3>
+<p style="margin:0 0 14px">人はなぜ退屈するのか、退屈とどう向き合えばいいのかを、哲学・経済史・人類学をまたいで考える本。序章で「好きなこと」とは何かという問いが立てられる。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">章ごとのメモ</h3>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第一章 暇と退屈の原理論 · p.21</h4>
+<p style="margin:0 0 14px">パスカルの話が出発点。気晴らしは、欲しいものより追いかける過程を求めているという整理。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">感想</h3>
+<p style="margin:0 0 14px">退屈を生活の組み立て方の問題として扱っているのが新鮮だった。</p>
+</div>
+</div>
+</div>
+</div>
+<div style="background:var(--color-surface);overflow-y:auto;min-height:0;padding:28px 24px;display:grid;grid-auto-rows:max-content;gap:28px">
+<div style="display:grid;gap:10px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">評価</div>
+<div style="display:flex;gap:3px;font-size:22px"><sc-for list="{{ starsB }}" as="s" hint-placeholder-count="5"><i class="ph-duotone ph-star" onClick="{{ s.onClick }}" style="cursor:pointer;color:{{ s.c }}"></i></sc-for></div>
+<div class="seg" style="display:flex"><sc-for list="{{ recB }}" as="o" hint-placeholder-count="3"><span class="seg-opt" onClick="{{ o.onClick }}" style="flex:1;justify-content:center;font-size:12px;background:{{ o.bg }};color:{{ o.fg }}">{{ o.label }}</span></sc-for></div>
+</div>
+<div style="display:grid;gap:4px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-bottom:6px">この本のメモ・引用 · クリックで挿入</div>
+<sc-for list="{{ refNotes }}" as="n" hint-placeholder-count="4">
+<div onMouseDown="{{ n.onDown }}" style="display:grid;gap:3px;padding:10px;border-radius:2px;cursor:pointer" style-hover="background:var(--color-neutral-200)">
+<span style="font-size:11px;letter-spacing:0.04em;color:{{ n.kc }}">{{ n.kind }} · p.{{ n.p }}</span>
+<span style="font-size:14px;line-height:1.65;font-style:{{ n.fs }}">{{ n.display }}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:grid;gap:2px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-bottom:6px">章 · クリックで章メモを追加</div>
+<sc-for list="{{ chaptersB }}" as="c" hint-placeholder-count="8">
+<div onMouseDown="{{ c.onDown }}" style="display:flex;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:2px;cursor:pointer;font-size:13px;color:{{ c.fg }}" style-hover="background:var(--color-neutral-200)"><span>{{ c.t }}</span><span style="color:var(--color-neutral-700)">p.{{ c.p }}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="3c">
+<div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>紙面＋アウトライン — 見出しから目次を自動生成。題字と罫で「1冊の記事」として組む</div>
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:grid;grid-template-columns:260px minmax(0,1fr)">
+<div style="padding:28px 20px;display:grid;grid-auto-rows:max-content;gap:22px;background:var(--color-neutral-100);overflow-y:auto;min-height:0">
+<button class="btn btn-ghost" style="justify-self:start"><i class="ph-duotone ph-arrow-left" style="font-size:18px"></i>本に戻る</button>
+<div style="display:grid;gap:2px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-bottom:6px;padding:0 8px">アウトライン</div>
+<sc-for list="{{ outline }}" as="o" hint-placeholder-count="7">
+<div onClick="{{ o.onClick }}" style="padding:5px 8px;border-radius:2px;cursor:pointer;line-height:1.4;padding-left:{{ o.pad }};font-size:{{ o.fz }};font-weight:{{ o.fw }};color:{{ o.fg }}" style-hover="background:var(--color-neutral-200)">{{ o.text }}</div>
+</sc-for>
+</div>
+<div style="display:grid;gap:8px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:0 8px">追加</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 4px"><sc-for list="{{ chipsC }}" as="c" hint-placeholder-count="4"><button class="btn btn-secondary" onMouseDown="{{ c.onDown }}" style="font-size:12px;padding:5px 10px">{{ c.label }}</button></sc-for></div>
+<button class="btn btn-primary" onMouseDown="{{ chapC }}" style="margin:4px 4px 0"><i class="ph-duotone ph-bookmark-simple" style="font-size:17px"></i>p.182 の章メモ</button>
+</div>
+</div>
+<div data-scroll="c" style="overflow-y:auto;min-height:0;position:relative">
+<div style="max-width:720px;padding:36px 64px 100px">
+<div style="font-size:48px;font-weight:600;line-height:1.1;letter-spacing:-0.02em">暇と退屈の倫理学</div>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);margin-top:14px;padding:9px 0;display:flex;align-items:center;gap:18px;font-size:12px;color:var(--color-neutral-800)">
+<span>國分功一郎</span><span>書き始め 9月3日</span><span>p.182 / 320</span><span>{{ charsC }}字</span>
+<div style="flex:1"></div>
+<div style="display:flex;gap:2px;font-size:16px"><sc-for list="{{ starsC }}" as="s" hint-placeholder-count="5"><i class="ph-duotone ph-star" onClick="{{ s.onClick }}" style="cursor:pointer;color:{{ s.c }}"></i></sc-for></div>
+<span style="color:var(--color-accent-700)">{{ recLabelC }}</span>
+</div>
+<div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" ref="{{ refC }}" onInput="{{ countC }}" style="font-size:17px;line-height:1.95;margin-top:8px;caret-color:var(--color-accent)">
+<h3 style="font-size:22px;font-weight:600;margin:28px 0 10px;line-height:1.3">要約</h3>
+<p style="margin:0 0 14px;font-size:20px;line-height:1.8">人はなぜ退屈するのか、退屈とどう向き合えばいいのかを、哲学・経済史・人類学をまたいで考える本。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">章ごとのメモ</h3>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第一章 暇と退屈の原理論 · p.21</h4>
+<p style="margin:0 0 14px">パスカルの「部屋でじっとしていられない」話が出発点。気晴らしは、欲しいものそのものより、追いかける過程を求めているという整理がわかりやすい。</p>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第二章 暇と退屈の系譜学 · p.75</h4>
+<p style="margin:0 0 14px">定住によって暇が生まれた、という見方。退屈が人類史の中では比較的新しい問題だとわかる。</p>
+<blockquote style="margin:6px 0 18px 24px;font-style:italic;color:var(--color-accent-2-800)">「人は楽しみを求めているのではなく、興奮を求めている。」 <span style="font-style:normal;font-size:12px;color:var(--color-neutral-700)">p.96</span></blockquote>
+<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">第四章 暇と退屈の疎外論 · p.165</h4>
+<p style="margin:0 0 14px">読書中。消費と浪費の区別が出てきたところ。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">感想</h3>
+<p style="margin:0 0 14px">退屈を「なくすべきもの」ではなく、生活の組み立て方の問題として扱っているのが新鮮だった。</p>
+<h3 style="font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3">行動に移すこと</h3>
+<ul style="margin:0 0 14px;padding-left:1.4em"><li>週末に1つだけ、目的を決めない時間をつくる</li><li>読み終えたら序章の問いに自分の答えを書く</li></ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">次の候補：「<a class="dv-oid" href="#3c">3c</a> に <a class="dv-oid" href="#3b">3b</a> の資料パネルを開閉式で足す」 · 「<a class="dv-oid" href="#3a">3a</a> を Notes Web の本の詳細から開けるようにする」 · 「読了時にレポートを仕上げる流れ」</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  refA = React.createRef(); refB = React.createRef(); refC = React.createRef();
+  state = { rate: { a: 4, b: 4, c: 4 }, rec: { a: 'strong', b: 'strong', c: 'strong' }, chars: { a: 0, b: 0, c: 0 }, outline: [], curCh: 3 };
+  H3 = 'font-size:22px;font-weight:600;margin:32px 0 10px;line-height:1.3';
+  H4 = 'font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)';
+  P = 'margin:0 0 14px';
+  CH = [['序章 「好きなこと」とは何か？', 11], ['第一章 暇と退屈の原理論', 21], ['第二章 暇と退屈の系譜学', 75], ['第三章 暇と退屈の経済史', 121], ['第四章 暇と退屈の疎外論', 165], ['第五章 暇と退屈の哲学', 205], ['第六章 暇と退屈の人間学', 253], ['第七章 暇と退屈の倫理学', 291]];
+  NOTES = [
+    { k: 'quote', p: 182, text: '退屈と向き合うことは、自分の生活を取り戻すことでもある。' },
+    { k: 'memo', p: 140, text: 'パスカルの「部屋でじっとしていられない」話。気晴らしの定義が思っていたより広い。' },
+    { k: 'quote', p: 96, text: '人は楽しみを求めているのではなく、興奮を求めている。' },
+    { k: 'memo', p: 41, text: '序章で問いが3つ立てられる。読み終えたらそれぞれに自分の答えを書く。' }
+  ];
+  refP = React.createRef(); refM1 = React.createRef(); refM2 = React.createRef(); refM3 = React.createRef(); refFrame = React.createRef();
+  MORE = [
+    { k: 'memo', p: 165, text: '消費は終わらない、浪費は満足して終わる。この区別は日常にも当てはめられそう。' },
+    { k: 'quote', p: 24, text: '暇と退屈を区別して考えなければならない。' }
+  ];
+  ta6 = React.createRef(); pv6 = React.createRef(); out6 = React.createRef(); fr6 = React.createRef();
+  MD0 = `## 要約
+
+人はなぜ退屈するのか、退屈とどう向き合えばいいのかを、哲学・経済史・人類学をまたいで考える本。序章で「好きなこと」とは何かという問いが立てられる。
+
+## 章ごとのメモ
+
+### 第一章 暇と退屈の原理論 · p.21
+
+パスカルの「部屋でじっとしていられない」話が出発点。気晴らしは、欲しいものそのものより、**追いかける過程**を求めているという整理がわかりやすい。
+
+### 第二章 暇と退屈の系譜学 · p.75
+
+定住によって暇が生まれた、という見方。
+
+> 「人は楽しみを求めているのではなく、興奮を求めている。」 p.96
+
+## 感想
+
+退屈を「なくすべきもの」ではなく、生活の組み立て方の問題として扱っているのが新鮮だった。
+
+## 行動に移すこと
+
+- 週末に1つだけ、目的を決めない時間をつくる
+- 読み終えたら序章の問いに自分の答えを書く
+`;
+  md2html(md) {
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const inl = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:600">$1</strong>').replace(/(^|[^*])\*([^*]+?)\*/g, '$1<em>$2</em>').replace(/~~(.+?)~~/g, '<s>$1</s>').replace(/`([^`]+)`/g, '<span style="background:var(--color-neutral-200);padding:0 4px;border-radius:2px">$1</span>').replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:var(--color-accent-700)">$1</a>').replace(/(^|\s)(p\.\d+)(?=\s|$)/g, '$1<span style="font-style:normal;font-size:12px;color:var(--color-neutral-700)">$2</span>');
+    const out = []; let list = null, para = [];
+    const flushP = () => { if (para.length) { out.push(`<p style="margin:0 0 14px;font-size:17px;line-height:1.95">${inl(para.join(' '))}</p>`); para = []; } };
+    const flushL = () => { if (list) { out.push(`<ul style="margin:0 0 14px;padding-left:1.4em;font-size:17px;line-height:1.95">${list.map(i => `<li>${inl(i)}</li>`).join('')}</ul>`); list = null; } };
+    md.split('\n').forEach(l => {
+      let m;
+      if (!l.trim()) { flushP(); flushL(); }
+      else if ((m = l.match(/^(#{1,3})\s+(.*)/))) { flushP(); flushL(); const lv = m[1].length; out.push(lv === 3 ? `<h4 style="font-size:17px;font-weight:600;margin:22px 0 4px;color:var(--color-accent-700)">${inl(m[2])}</h4>` : `<h3 style="font-size:${lv === 1 ? 28 : 22}px;font-weight:600;margin:32px 0 10px;line-height:1.3">${inl(m[2])}</h3>`); }
+      else if ((m = l.match(/^>\s?(.*)/))) { flushP(); flushL(); out.push(`<blockquote style="margin:6px 0 18px 24px;font-size:17px;line-height:1.9;font-style:italic;color:var(--color-accent-2-800)">${inl(m[1])}</blockquote>`); }
+      else if (/^(---|\*\*\*)\s*$/.test(l)) { flushP(); flushL(); out.push('<div style="height:40px"></div>'); }
+      else if ((m = l.match(/^[-*]\s+\[( |x)\]\s+(.*)/))) { flushP(); (list = list || []).push((m[1] === 'x' ? '☑ ' : '☐ ') + m[2]); }
+      else if ((m = l.match(/^(?:[-*]|\d+\.)\s+(.*)/))) { flushP(); (list = list || []).push(m[1]); }
+      else { flushL(); para.push(l.trim()); }
+    });
+    flushP(); flushL();
+    return out.join('');
+  }
+  paint6() { if (this.out6.current) this.out6.current.innerHTML = this.md2html(this.state.md6 ?? this.MD0); }
+  componentDidUpdate() { this.paint6(); }
+  ins6(text, wrap) {
+    const ta = this.ta6.current, md = this.state.md6 ?? this.MD0;
+    const a = ta ? ta.selectionStart : md.length, b = ta ? ta.selectionEnd : md.length;
+    let ins, caret;
+    if (wrap) { const w = Array.isArray(wrap) ? wrap : [wrap, wrap]; const selT = md.slice(a, b) || text || '太字'; ins = w[0] + selT + w[1]; caret = a + ins.length; }
+    else {
+      const before = md.slice(0, a), after = md.slice(b);
+      const pre = !before ? '' : before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+      const body = text.replace(/\n+$/, '');
+      const post = !after ? '\n' : after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+      ins = pre + body + post; caret = a + pre.length + body.length;
+    }
+    this.setState({ md6: md.slice(0, a) + ins + md.slice(b) }, () => { if (ta) { ta.focus(); ta.setSelectionRange(caret, caret); } });
+  }
+  componentDidMount() {
+    this.paint6();
+    this.recount();
+    this.onMove = e => {
+      const d6 = this.drag6;
+      if (d6) { this.setState({ fw6: { x: Math.min(Math.max(d6.ox + (e.clientX - d6.sx) / d6.sc, 0), 1200 - 320), y: Math.min(Math.max(d6.oy + (e.clientY - d6.sy) / d6.sc, 56), 760 - 48) } }); return; }
+      const d = this.drag; if (!d) return;
+      this.setState({ fw: { x: Math.min(Math.max(d.ox + (e.clientX - d.sx) / d.sc, 0), 1200 - 340), y: Math.min(Math.max(d.oy + (e.clientY - d.sy) / d.sc, 0), 760 - 52) } });
+    };
+    this.onUp = () => { this.drag = null; this.drag6 = null; if (this.state.peek && !this.state.pinned) setTimeout(() => this.setState({ peek: false }), 0); };
+    window.addEventListener('mousemove', this.onMove); window.addEventListener('mouseup', this.onUp); window.addEventListener('pointerup', this.onUp);
+  }
+  componentWillUnmount() { window.removeEventListener('mousemove', this.onMove); window.removeEventListener('mouseup', this.onUp); window.removeEventListener('pointerup', this.onUp); }
+  recount() {
+    const n = r => r.current ? r.current.innerText.replace(/\s/g, '').length : 0;
+    const ol = r => r.current ? [...r.current.querySelectorAll('h3,h4')].map(h => ({ text: h.innerText.trim(), lv: h.tagName === 'H3' ? 1 : 2, el: h })).filter(o => o.text) : [];
+    this.setState({ chars: { a: n(this.refA), b: n(this.refB), c: n(this.refC), p: n(this.refP), m1: n(this.refM1), m2: n(this.refM2), m3: n(this.refM3) }, outline: ol(this.refC), outline4: ol(this.refP) });
+  }
+  ins(ref, html) {
+    const ed = ref.current; if (!ed) return;
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !ed.contains(sel.anchorNode)) {
+      ed.focus(); const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); sel.removeAllRanges(); sel.addRange(r);
+    } else { const r = sel.getRangeAt(0).cloneRange(); ed.focus(); sel.removeAllRanges(); sel.addRange(r); }
+    document.execCommand('insertHTML', false, html);
+    setTimeout(() => this.recount(), 0);
+  }
+  head(label) { return `<h3 style="${this.H3}">${label}</h3><p style="${this.P}"><br></p>`; }
+  chap(t, p) { return `<h4 style="${this.H4}">${t} · p.${p}</h4><p style="${this.P}"><br></p>`; }
+  renderVals() {
+    const s = this.state;
+    const stars = k => [1, 2, 3, 4, 5].map(i => ({ c: i <= s.rate[k] ? 'var(--color-accent)' : 'var(--color-neutral-400)', onClick: () => this.setState(st => ({ rate: { ...st.rate, [k]: i } })) }));
+    const RL = [['strong', '人にすすめたい'], ['some', '人を選ぶ'], ['self', '自分用']];
+    const rec = k => RL.map(([v, l]) => ({ label: l, bg: s.rec[k] === v ? 'var(--color-accent)' : 'transparent', fg: s.rec[k] === v ? 'var(--color-bg)' : 'inherit', onClick: () => this.setState(st => ({ rec: { ...st.rec, [k]: v } })) }));
+    const chips = ref => ['要約', '感想', '学び・行動', '章メモ'].map(l => ({ label: l, onDown: e => { e.preventDefault(); this.ins(ref, l === '章メモ' ? this.chap('章', 182) : this.head(l === '学び・行動' ? '行動に移すこと' : l)); } }));
+    const cur = this.CH.reduce((a, c, i) => c[1] <= 182 ? i : a, 0);
+    const fmt = n => n.toLocaleString('ja-JP');
+    const allN = [...this.NOTES, ...this.MORE].sort((a, b) => b.p - a.p);
+    const tab = s.tab || 'all';
+    const quoteHtml = n => n.k === 'quote' ? `<blockquote style="margin:6px 0 18px 24px;font-style:italic;color:var(--color-accent-2-800)">「${n.text}」 <span style="font-style:normal;font-size:12px;color:var(--color-neutral-700)">p.${n.p}</span></blockquote><p style="${this.P}"><br></p>` : `<p style="${this.P}">${n.text}（p.${n.p}）</p>`;
+    const noteRow = (n, extra) => ({ ...n, kind: n.k === 'quote' ? '引用' : 'メモ', kc: n.k === 'quote' ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', fs: n.k === 'quote' ? 'italic' : 'normal', display: n.k === 'quote' ? `「${n.text}」` : n.text, ...extra(n) });
+    const filt = t => allN.filter(n => t === 'all' || n.k === t);
+    const pd = e => e.preventDefault();
+    const tabs = (cur, key) => [['all', 'すべて'], ['quote', '引用'], ['memo', 'メモ']].map(([v, l]) => ({ label: l, bg: cur === v ? 'var(--color-accent)' : 'transparent', fg: cur === v ? 'var(--color-bg)' : 'inherit', onClick: () => this.setState({ [key]: v }), onDown: e => { pd(e); this.setState({ [key]: v }); } }));
+    const fw = s.fw || { x: 820, y: 90 }, fwOpen = s.fwOpen !== false, sheet = s.sheet || 'closed', kb = s.kb || 'keys';
+    const K = [['→', 1, 1, 's'], ['あ', 1, 2], ['か', 1, 3], ['さ', 1, 4], ['⌫', 1, 5, 's'], ['↶', 2, 1, 's'], ['た', 2, 2], ['な', 2, 3], ['は', 2, 4], ['空白', 2, 5, 's'], ['ABC', 3, 1, 's'], ['ま', 3, 2], ['や', 3, 3], ['ら', 3, 4], ['改行', '3 / span 2', 5, 's'], ['あ/A', 4, 1, 's'], ['゛゜', 4, 2], ['わ', 4, 3], ['、。', 4, 4]];
+    const toSheet = v => this.setState({ sheet: v });
+    const md = s.md6 ?? this.MD0, v6 = s.view6 || 'split', fw6 = s.fw6 || { x: 40, y: 420 }, fwOpen6 = s.fwOpen6 !== false;
+    const m = {
+      frame: this.fr6, ta: this.ta6, pv: this.pv6, out: this.out6, md,
+      onMd: e => this.setState({ md6: e.target.value }),
+      onScroll: e => { const t = e.target, p = this.pv6.current; if (p && v6 === 'split') p.scrollTop = t.scrollTop / Math.max(t.scrollHeight - t.clientHeight, 1) * (p.scrollHeight - p.clientHeight); },
+      chars: fmt(md.replace(/[#>*\-\s]/g, '').length),
+      tools: [['ph-text-h-two', '見出し', '## '], ['ph-text-h-three', '章', '### 第◯章 · p.182'], ['ph-quotes', '', '> 「」 p.182'], ['ph-list-bullets', '', '- '], ['ph-text-b', '', null]].map(([i, l, t]) => ({ icon: 'ph-duotone ' + i, label: l, title: t || '太字', onDown: e => { pd(e); t ? this.ins6(t) : this.ins6('', '**'); } })),
+      views: [['split', '並べる'], ['write', '書く'], ['read', '読む']].map(([k, l]) => ({ label: l, bg: v6 === k ? 'var(--color-accent)' : 'transparent', fg: v6 === k ? 'var(--color-bg)' : 'inherit', onClick: () => this.setState({ view6: k }) })),
+      cols: v6 === 'split' ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)', showEd: v6 !== 'read', showPv: v6 !== 'write', pvMax: v6 === 'read' ? '720px' : 'none',
+      fwOpen: fwOpen6, toggleFw: () => this.setState({ fwOpen6: !fwOpen6 }), fwX: fw6.x + 'px', fwY: fw6.y + 'px',
+      drag: e => { pd(e); const f = this.fr6.current; this.drag6 = { sx: e.clientX, sy: e.clientY, ox: fw6.x, oy: fw6.y, sc: f ? f.getBoundingClientRect().width / 1200 : 1 }; },
+      fwTabs: [['notes', 'メモ・引用'], ['syntax', '記法']].map(([k, l]) => ({ label: l, bg: (s.fwTab6 || 'notes') === k ? 'var(--color-accent)' : 'transparent', fg: (s.fwTab6 || 'notes') === k ? 'var(--color-bg)' : 'inherit', onClick: () => this.setState({ fwTab6: k }) })),
+      isNotes: (s.fwTab6 || 'notes') === 'notes', isSyntax: s.fwTab6 === 'syntax',
+      syntax: [
+        ['## 見出し', '見出し', '## 見出し', null, '17px', '600'],
+        ['### 章 · p.21', '章の見出し', '### 第◯章 · p.182', null, '15px', '600', 'var(--color-accent-700)'],
+        ['**太字**', '太字', null, ['**', '**'], '14px', '600'],
+        ['*斜体*', '斜体', null, ['*', '*'], '14px', '400', null, 'italic'],
+        ['~~取り消し~~', '取り消し線', null, ['~~', '~~'], '14px', '400'],
+        ['> 引用 p.96', '「引用」', '> 「」 p.182', null, '14px', '400', 'var(--color-accent-2-800)', 'italic'],
+        ['- 項目', '・ 箇条書き', '- ', null, '14px', '400'],
+        ['1. 項目', '1. 番号付き', '1. ', null, '14px', '400'],
+        ['- [ ] やること', '☐ チェックリスト', '- [ ] ', null, '14px', '400'],
+        ['[文字](URL)', 'リンク', null, ['[', '](https://)'], '14px', '400', 'var(--color-accent-700)'],
+        ['`語句`', '語句を強調', null, ['`', '`'], '14px', '400'],
+        ['---', '区切り（余白）', '---', null, '14px', '400', 'var(--color-neutral-700)']
+      ].map(([code, label, block, wrap, fz, fw, fg, fs]) => ({ code, label, fz, fw, fg: fg || 'var(--color-text)', fs: fs || 'normal',
+        onDown: e => { pd(e); wrap ? this.ins6(label, wrap) : this.ins6(block); } })),
+      notes: allN.map(n => noteRow(n, n => ({ onDown: e => { pd(e); this.ins6(n.k === 'quote' ? `> 「${n.text}」 p.${n.p}\n` : `${n.text}（p.${n.p}）\n`); } })))
+    };
+    return {
+      m,
+      refP: this.refP, refM1: this.refM1, refM2: this.refM2, refM3: this.refM3, refFrame: this.refFrame,
+      countP: () => this.recount(), countM: () => this.recount(), stop: e => e.stopPropagation(),
+      charsP: fmt(s.chars.p || 0), charsM1: fmt(s.chars.m1 || 0), charsM2: fmt(s.chars.m2 || 0), charsM3: fmt(s.chars.m3 || 0),
+      outline4: (s.outline4 || []).map(o => ({ text: o.text, pad: o.lv === 1 ? '8px' : '22px', fz: o.lv === 1 ? '14px' : '12px', fw: o.lv === 1 ? '600' : '400', fg: o.lv === 1 ? 'var(--color-text)' : 'var(--color-neutral-800)',
+        onClick: () => { const sc = o.el.closest('[data-scroll]'); if (sc) sc.scrollTo({ top: o.el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 24, behavior: 'smooth' }); } })),
+      fwOpen, fwBtn: fwOpen ? 'メモ窓を閉じる' : 'メモ窓を開く', toggleFw: () => this.setState({ fwOpen: !fwOpen }),
+      fwX: fw.x + 'px', fwY: fw.y + 'px', fwExpanded: !s.fwMin, minIcon: s.fwMin ? 'ph-duotone ph-arrows-out-simple' : 'ph-duotone ph-minus',
+      toggleMin: () => this.setState({ fwMin: !s.fwMin }), fwCount: filt(tab).length,
+      dragStart: e => { pd(e); const f = this.refFrame.current; this.drag = { sx: e.clientX, sy: e.clientY, ox: fw.x, oy: fw.y, sc: f ? f.getBoundingClientRect().width / 1200 : 1 }; },
+      fwTabs: tabs(tab, 'tab'),
+      fwNotes: filt(tab).map(n => noteRow(n, n => ({ onDown: e => { pd(e); this.ins(this.refP, quoteHtml(n)); } }))),
+      sheetOpen: sheet !== 'closed', sheetH: sheet === 'full' ? '88%' : '52%',
+      openSheet: () => toSheet('half'), closeSheet: () => toSheet('closed'), toggleSheetSize: () => toSheet(sheet === 'full' ? 'half' : 'full'),
+      sheetNotes: filt(tab).map(n => noteRow(n, n => ({ onDown: e => { pd(e); this.ins(this.refM1, quoteHtml(n)); toSheet('closed'); } }))),
+      headM1: e => { pd(e); this.ins(this.refM1, this.head('見出し')); }, chapM1: e => { pd(e); this.ins(this.refM1, this.chap(this.CH[cur][0], 182)); },
+      peekOn: !!s.peek, peekPinned: !!s.pinned, peekHint: s.pinned ? 'タップで挿入' : '指を離すと戻る',
+      peekBtnBg: s.peek ? 'var(--color-accent)' : 'var(--color-bg)', peekBtnFg: s.peek ? 'var(--color-bg)' : 'var(--color-accent-700)',
+      peekDown: e => { pd(e); try { e.target.releasePointerCapture(e.pointerId); } catch (x) {} this.setState({ peek: true, pinned: false }); },
+      pin: () => this.setState({ peek: true, pinned: true }), unpin: () => this.setState({ peek: false, pinned: false }),
+      peekNotes: allN.map(n => noteRow(n, n => ({ onUp: () => { if (!this.state.pinned) this.ins(this.refM2, quoteHtml(n)); }, onClickPinned: () => { if (this.state.pinned) { this.ins(this.refM2, quoteHtml(n)); this.setState({ peek: false, pinned: false }); } } }))),
+      kbKeys: K.map(([l, row, col, side]) => ({ l, row: String(row), col: String(col), fz: side ? '12px' : '18px', bg: side ? 'var(--color-neutral-200)' : 'var(--color-bg)' })),
+      kbIsKeys: kb === 'keys', kbIsMemos: kb === 'memos',
+      kbTabs: [['keys', 'キーボード', 'ph-keyboard'], ['memos', 'メモ', 'ph-cards']].map(([v, l, i]) => ({ label: l, icon: 'ph-duotone ' + i, bg: kb === v ? 'var(--color-accent)' : 'transparent', fg: kb === v ? 'var(--color-bg)' : 'var(--color-accent-700)', onDown: e => { pd(e); this.setState({ kb: v }); } })),
+      kbFilter: tabs(s.kbTab || 'all', 'kbTab'),
+      kbNotes: filt(s.kbTab || 'all').map(n => noteRow(n, n => ({ onDown: e => { pd(e); this.ins(this.refM3, quoteHtml(n)); } }))),
+      refA: this.refA, refB: this.refB, refC: this.refC,
+      countA: () => this.recount(), countB: () => this.recount(), countC: () => this.recount(),
+      charsA: fmt(s.chars.a), charsB: fmt(s.chars.b), charsC: fmt(s.chars.c),
+      starsA: stars('a'), starsB: stars('b'), starsC: stars('c'), recA: rec('a'), recB: rec('b'),
+      recLabelC: RL.find(r => r[0] === s.rec.c)[1],
+      chipsA: chips(this.refA), chipsB: chips(this.refB), chipsC: chips(this.refC),
+      chapA: e => { e.preventDefault(); this.ins(this.refA, this.chap(this.CH[cur][0], 182)); },
+      chapC: e => { e.preventDefault(); this.ins(this.refC, this.chap(this.CH[cur][0], 182)); },
+      refNotes: this.NOTES.map(n => ({ ...n, kind: n.k === 'quote' ? '引用' : 'メモ', kc: n.k === 'quote' ? 'var(--color-accent-2-700)' : 'var(--color-neutral-700)', fs: n.k === 'quote' ? 'italic' : 'normal', display: n.k === 'quote' ? `「${n.text}」` : n.text,
+        onDown: e => { e.preventDefault(); this.ins(this.refB, n.k === 'quote' ? `<blockquote style="margin:6px 0 18px 24px;font-style:italic;color:var(--color-accent-2-800)">「${n.text}」 <span style="font-style:normal;font-size:12px;color:var(--color-neutral-700)">p.${n.p}</span></blockquote><p style="${this.P}"><br></p>` : `<p style="${this.P}">${n.text}（p.${n.p}）</p>`); } })),
+      chaptersB: this.CH.map(([t, p], i) => ({ t, p, fg: i === cur ? 'var(--color-accent-700)' : i > cur ? 'var(--color-neutral-700)' : 'inherit', onDown: e => { e.preventDefault(); this.ins(this.refB, this.chap(t, p)); } })),
+      outline: s.outline.map(o => ({ text: o.text, pad: o.lv === 1 ? '8px' : '22px', fz: o.lv === 1 ? '14px' : '12px', fw: o.lv === 1 ? '600' : '400', fg: o.lv === 1 ? 'var(--color-text)' : 'var(--color-neutral-800)',
+        onClick: () => { const sc = o.el.closest('[data-scroll]'); if (sc) sc.scrollTo({ top: o.el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 24, behavior: 'smooth' }); } }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<script src="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/_ds_bundle.js"></script>
+<style>body{margin:0;background:var(--color-neutral-300);font-family:"Source Serif 4","Noto Serif JP",serif}a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}.dv-turn{padding:48px 48px 40px;scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 24px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#201e1d;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font-size:15px;font-weight:600;color:#201e1d}.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.1);color:#201e1d;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--color-neutral-800)}.dv-opt:target .dv-oid{background:var(--color-accent);color:#fff}.dv-next{margin:28px 0 0;font-size:13px;color:var(--color-neutral-800)}</style>
+</helmet>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Web（デスクトップ）骨格 — ナビゲーション構成3案 × 本棚／検索・追加</span></div>
+<div style="max-width:760px;margin:0 0 36px;font-size:14px;line-height:1.75">
+<p style="margin:0">共通パーツは <a class="dv-oid" href="#1a">1a</a> のものを使います。表紙はグレーのブロック、記録はページ単位の引用・メモが中心という前提です。3案ではナビゲーションの構成だけを変えています。<b>2a</b> は左サイドバー、<b>2b</b> は紙面風の上部マストヘッド、<b>2c</b> はアイコンレールと一覧・詳細の3ペインにコマンドパレットを組み合わせたものです。</p>
+</div>
+<div class="dv-opts" style="flex-direction:column;gap:64px">
+
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>左サイドバー — 棚とタグを常に表示。追加は専用ページ</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap">
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column">
+<div style="height:36px;flex:none;background:var(--color-neutral-200);display:flex;align-items:center;gap:8px;padding:0 14px"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="margin-left:16px;font-size:12px;color:var(--color-neutral-700);background:var(--color-bg);padding:3px 12px;border-radius:2px;width:360px">notes.app/library</span></div>
+<div style="flex:1;display:grid;grid-template-columns:240px 1fr;min-height:0">
+<div style="background:var(--color-surface);padding:28px 20px;display:flex;flex-direction:column;gap:28px">
+<div style="font-size:22px;font-weight:600">Notes</div>
+<button class="btn btn-primary"><i class="ph-duotone ph-plus"></i>本を追加</button>
+<div style="display:flex;flex-direction:column;gap:4px;font-size:14px">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:2px;background:var(--color-accent-100);color:var(--color-accent-800)"><i class="ph-duotone ph-books" style="font-size:18px"></i>本棚</div>
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px"><i class="ph-duotone ph-quotes" style="font-size:18px"></i>メモ・引用</div>
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px"><i class="ph-duotone ph-chart-line-up" style="font-size:18px"></i>振り返り</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">棚</div>
+<div style="display:flex;justify-content:space-between;padding:0 10px"><span>読書中</span><span style="color:var(--color-neutral-700)">3</span></div>
+<div style="display:flex;justify-content:space-between;padding:0 10px"><span>読了</span><span style="color:var(--color-neutral-700)">38</span></div>
+<div style="display:flex;justify-content:space-between;padding:0 10px"><span>積読</span><span style="color:var(--color-neutral-700)">12</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">タグ</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 10px"><span class="tag tag-neutral">#哲学</span><span class="tag tag-neutral">#歴史</span><span class="tag tag-neutral">#SF</span><span class="tag tag-neutral">#心理</span></div>
+</div>
+</div>
+<div style="padding:36px 48px;display:flex;flex-direction:column;gap:32px;overflow:hidden">
+<div style="display:flex;align-items:flex-end;gap:20px">
+<div style="flex:1"><div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">42冊 · 引用・メモ 186件</div><div style="font-size:34px;font-weight:600;line-height:1.15">本棚</div></div>
+<input class="input" placeholder="本棚を検索" style="width:260px">
+<div class="seg"><label class="seg-opt" style="background:var(--color-accent);color:var(--color-bg)"><input type="radio" name="v2a"><i class="ph-duotone ph-squares-four"></i></label><label class="seg-opt"><input type="radio" name="v2a"><i class="ph-duotone ph-list"></i></label></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">いま読んでいる</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px">
+<div style="display:flex;gap:14px"><div style="width:64px;height:94px;flex:none;background:var(--color-neutral-300);border-radius:2px"></div><div style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">暇と退屈の倫理学</span><span style="font-size:11px;color:var(--color-neutral-700)">p.182 / 320</span><div style="flex:1"></div><div style="height:3px;background:var(--color-neutral-300)"><div style="width:57%;height:100%;background:var(--color-accent)"></div></div></div></div>
+<div style="display:flex;gap:14px"><div style="width:64px;height:94px;flex:none;background:var(--color-neutral-300);border-radius:2px"></div><div style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">人新世の「資本論」</span><span style="font-size:11px;color:var(--color-neutral-700)">p.64 / 375</span><div style="flex:1"></div><div style="height:3px;background:var(--color-neutral-300)"><div style="width:17%;height:100%;background:var(--color-accent)"></div></div></div></div>
+<div style="display:flex;gap:14px"><div style="width:64px;height:94px;flex:none;background:var(--color-neutral-300);border-radius:2px"></div><div style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">センス・オブ・ワンダー</span><span style="font-size:11px;color:var(--color-neutral-700)">p.40 / 60</span><div style="flex:1"></div><div style="height:3px;background:var(--color-neutral-300)"><div style="width:67%;height:100%;background:var(--color-accent)"></div></div></div></div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:24px 20px">
+<sc-for list="{{ books6 }}" as="b" hint-placeholder-count="6">
+<div style="display:flex;flex-direction:column;gap:5px"><div style="aspect-ratio:2/3;background:var(--color-neutral-300);border-radius:2px"></div><span style="font-size:13px;font-weight:600;line-height:1.3">{{ b.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ b.s }}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column">
+<div style="height:36px;flex:none;background:var(--color-neutral-200);display:flex;align-items:center;gap:8px;padding:0 14px"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="margin-left:16px;font-size:12px;color:var(--color-neutral-700);background:var(--color-bg);padding:3px 12px;border-radius:2px;width:360px">notes.app/add</span></div>
+<div style="flex:1;display:grid;grid-template-columns:240px 1fr 320px;min-height:0">
+<div style="background:var(--color-surface);padding:28px 20px;display:flex;flex-direction:column;gap:28px">
+<div style="font-size:22px;font-weight:600">Notes</div>
+<button class="btn btn-primary" style="background:var(--color-accent-700)"><i class="ph-duotone ph-plus"></i>本を追加</button>
+<div style="display:flex;flex-direction:column;gap:4px;font-size:14px">
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px"><i class="ph-duotone ph-books" style="font-size:18px"></i>本棚</div>
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px"><i class="ph-duotone ph-quotes" style="font-size:18px"></i>メモ・引用</div>
+<div style="display:flex;align-items:center;gap:10px;padding:7px 10px"><i class="ph-duotone ph-chart-line-up" style="font-size:18px"></i>振り返り</div>
+</div>
+</div>
+<div style="padding:36px 40px;display:flex;flex-direction:column;gap:24px;overflow:hidden">
+<div style="font-size:34px;font-weight:600;line-height:1.15">本を追加</div>
+<div class="seg" style="align-self:flex-start"><label class="seg-opt" style="background:var(--color-accent);color:var(--color-bg)"><input type="radio" name="m2a">書名・著者</label><label class="seg-opt"><input type="radio" name="m2a">ISBN</label><label class="seg-opt"><input type="radio" name="m2a">手入力</label></div>
+<input class="input" value="暇と退屈" style="font-size:18px;min-height:48px">
+<div style="font-size:12px;color:var(--color-neutral-700)">4件</div>
+<div style="display:flex;flex-direction:column;gap:22px">
+<sc-for list="{{ results }}" as="r" hint-placeholder-count="4">
+<div style="display:flex;gap:16px;align-items:center"><div style="width:44px;height:64px;flex:none;background:var(--color-neutral-300);border-radius:1px"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:600">{{ r.t }}</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ r.a }} · {{ r.p }}</span></div><sc-if value="{{ r.added }}" hint-placeholder-val="{{ false }}"><span class="tag tag-neutral">本棚にあります</span></sc-if><sc-if value="{{ r.notAdded }}" hint-placeholder-val="{{ true }}"><button class="btn btn-secondary">選択</button></sc-if></div>
+</sc-for>
+</div>
+</div>
+<div style="background:var(--color-surface);padding:36px 28px;display:flex;flex-direction:column;gap:20px">
+<div style="width:112px;height:164px;background:var(--color-neutral-300);border-radius:2px"></div>
+<div><div style="font-size:20px;font-weight:600;line-height:1.3">暇と退屈の倫理学 増補新版</div><div style="font-size:12px;color:var(--color-neutral-700)">國分功一郎 · 太田出版 · 432ページ</div></div>
+<div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+<div style="font-size:12px;color:var(--color-neutral-700)">追加する棚</div>
+<label class="radio"><input type="radio" name="st2a"><span class="dot"></span>読みたい（積読）</label>
+<label class="radio"><input type="radio" name="st2a"><span class="dot" style="border-color:var(--color-accent);background:var(--color-accent);box-shadow:inset 0 0 0 4px var(--color-bg)"></span>読書中</label>
+<label class="radio"><input type="radio" name="st2a"><span class="dot"></span>読了</label>
+</div>
+<button class="btn btn-primary btn-block">本棚に追加</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>マストヘッド — 紙面の見出しと罫で上部に集約。検索1つで本棚と新規追加の両方を探す</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap">
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column">
+<div style="height:36px;flex:none;background:var(--color-neutral-200);display:flex;align-items:center;gap:8px;padding:0 14px"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="margin-left:16px;font-size:12px;color:var(--color-neutral-700);background:var(--color-bg);padding:3px 12px;border-radius:2px;width:360px">notes.app</span></div>
+<div style="padding:24px 64px 0;display:flex;flex-direction:column;gap:10px">
+<div style="font-size:48px;font-weight:600;line-height:1;letter-spacing:-0.02em">Notes</div>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);padding:10px 0;display:flex;align-items:center;gap:28px;font-size:14px">
+<span style="font-size:12px;color:var(--color-neutral-700)">2026年9月25日 金曜日</span>
+<span style="color:var(--color-accent);font-weight:600">本棚</span><span>メモ・引用</span><span>振り返り</span>
+<div style="flex:1"></div>
+<input class="input" placeholder="本棚を検索・本を追加" style="width:280px;min-height:32px">
+</div>
+</div>
+<div style="flex:1;padding:36px 64px;display:grid;grid-template-columns:1.4fr 1fr;gap:56px;overflow:hidden">
+<div style="display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;gap:28px">
+<div style="width:150px;height:220px;flex:none;background:var(--color-neutral-300);border-radius:2px"></div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">いま読んでいる · p.182 / 320</div>
+<div style="font-size:32px;font-weight:600;line-height:1.2">暇と退屈の倫理学</div>
+<div style="font-size:13px;color:var(--color-neutral-700)">國分功一郎</div>
+<div style="font-size:17px;font-style:italic;line-height:1.7;color:var(--color-accent-2-700)">「退屈と向き合うことは、自分の生活を取り戻すことでもある。」</div>
+<div style="display:flex;gap:10px"><button class="btn btn-primary">メモを書く</button><button class="btn btn-secondary">進捗を記録</button></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">本棚 · 42冊</div>
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:18px">
+<sc-for list="{{ books6 }}" as="b" hint-placeholder-count="6">
+<div style="display:flex;flex-direction:column;gap:5px"><div style="aspect-ratio:2/3;background:var(--color-neutral-300);border-radius:2px"></div><span style="font-size:12px;font-weight:600;line-height:1.3">{{ b.t }}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:22px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">ほかに読んでいる</div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">人新世の「資本論」</span><span style="font-size:12px;color:var(--color-neutral-700)">斎藤幸平 · p.64 / 375 · 17%</span></div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:20px;font-weight:600">センス・オブ・ワンダー</span><span style="font-size:12px;color:var(--color-neutral-700)">レイチェル・カーソン · p.40 / 60 · 67%</span></div>
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-top:18px">最近の引用</div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-style:italic;line-height:1.7">「人は楽しみを求めているのではなく、興奮を求めている。」</span><span style="font-size:11px;color:var(--color-neutral-700)">暇と退屈の倫理学 · p.96</span></div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-style:italic;line-height:1.7">「知ることは感じることの半分も重要ではない。」</span><span style="font-size:11px;color:var(--color-neutral-700)">センス・オブ・ワンダー · p.24</span></div>
+</div>
+</div>
+</div>
+
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column">
+<div style="height:36px;flex:none;background:var(--color-neutral-200);display:flex;align-items:center;gap:8px;padding:0 14px"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="margin-left:16px;font-size:12px;color:var(--color-neutral-700);background:var(--color-bg);padding:3px 12px;border-radius:2px;width:360px">notes.app/search?q=暇と退屈</span></div>
+<div style="padding:24px 64px 0;display:flex;flex-direction:column;gap:10px">
+<div style="font-size:48px;font-weight:600;line-height:1;letter-spacing:-0.02em">Notes</div>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);padding:10px 0;display:flex;align-items:center;gap:28px;font-size:14px">
+<span style="font-size:12px;color:var(--color-neutral-700)">2026年9月25日 金曜日</span>
+<span>本棚</span><span>メモ・引用</span><span>振り返り</span>
+<div style="flex:1"></div>
+<input class="input" value="暇と退屈" style="width:280px;min-height:32px;border-color:var(--color-accent)">
+</div>
+</div>
+<div style="flex:1;padding:36px 64px;display:flex;flex-direction:column;gap:36px;overflow:hidden">
+<div style="font-size:32px;font-weight:600">「暇と退屈」</div>
+<div style="display:grid;grid-template-columns:280px 1fr;gap:56px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">あなたの本棚 · 1冊 · 引用 3件</div>
+<div style="display:flex;gap:14px"><div style="width:64px;height:94px;flex:none;background:var(--color-neutral-300);border-radius:2px"></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:16px;font-weight:600">暇と退屈の倫理学</span><span style="font-size:12px;color:var(--color-neutral-700)">読書中 · 57%</span></div></div>
+<div style="font-size:14px;font-style:italic;line-height:1.7">「…<span style="background:var(--color-accent-2-100)">退屈</span>と向き合うことは…」<br><span style="font-style:normal;font-size:11px;color:var(--color-neutral-700)">p.182</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">本棚に追加できる本 · 3冊</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px">
+<sc-for list="{{ newResults }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="width:100px;height:146px;background:var(--color-neutral-300);border-radius:2px"></div><span style="font-size:15px;font-weight:600;line-height:1.3">{{ r.t }}</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ r.a }}<br>{{ r.p }}</span><button class="btn btn-secondary" style="align-self:flex-start"><i class="ph-duotone ph-plus"></i>積読に追加</button></div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>3ペイン — アイコンレール＋一覧＋詳細。検索と追加は ⌘K のコマンドパレット</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap">
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column">
+<div style="height:36px;flex:none;background:var(--color-neutral-200);display:flex;align-items:center;gap:8px;padding:0 14px"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="margin-left:16px;font-size:12px;color:var(--color-neutral-700);background:var(--color-bg);padding:3px 12px;border-radius:2px;width:360px">notes.app/library/hima-to-taikutsu</span></div>
+<div style="flex:1;display:grid;grid-template-columns:64px 320px 1fr;min-height:0">
+<div style="background:var(--color-surface);padding:20px 0;display:flex;flex-direction:column;align-items:center;gap:18px;font-size:22px;color:var(--color-neutral-700)">
+<span style="font-size:18px;font-weight:600;color:var(--color-text)">N</span>
+<i class="ph-duotone ph-books" style="color:var(--color-accent)"></i><i class="ph-duotone ph-quotes"></i><i class="ph-duotone ph-chart-line-up"></i>
+<div style="flex:1"></div><i class="ph-duotone ph-magnifying-glass"></i><i class="ph-duotone ph-gear"></i>
+</div>
+<div style="padding:24px 20px;display:flex;flex-direction:column;gap:18px;background:var(--color-neutral-100);overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:22px;font-weight:600">本棚</span><span style="font-size:11px;color:var(--color-neutral-700);background:var(--color-neutral-200);padding:2px 6px;border-radius:2px">⌘K 検索・追加</span></div>
+<div class="seg" style="display:flex"><label class="seg-opt" style="flex:1;justify-content:center;background:var(--color-accent);color:var(--color-bg)"><input type="radio" name="f2c">読書中</label><label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="f2c">読了</label><label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="f2c">積読</label></div>
+<div style="display:flex;gap:12px;padding:8px;background:var(--color-accent-100);border-radius:2px"><div style="width:36px;height:52px;flex:none;background:var(--color-neutral-300)"></div><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">暇と退屈の倫理学</span><span style="font-size:11px;color:var(--color-neutral-700)">57% · メモ12</span></div></div>
+<sc-for list="{{ books6 }}" as="b" hint-placeholder-count="6">
+<div style="display:flex;gap:12px;padding:0 8px"><div style="width:36px;height:52px;flex:none;background:var(--color-neutral-300)"></div><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">{{ b.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ b.a }}</span></div></div>
+</sc-for>
+</div>
+<div style="padding:36px 56px;display:flex;flex-direction:column;gap:28px;overflow:hidden">
+<div style="display:flex;gap:24px;align-items:flex-end">
+<div style="width:112px;height:164px;flex:none;background:var(--color-neutral-300);border-radius:2px"></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px"><span class="tag tag-accent" style="align-self:flex-start">読書中</span><div style="font-size:30px;font-weight:600;line-height:1.2">暇と退屈の倫理学</div><div style="font-size:13px;color:var(--color-neutral-700)">國分功一郎 · p.182 / 320</div><div style="height:3px;background:var(--color-neutral-300);max-width:360px"><div style="width:57%;height:100%;background:var(--color-accent)"></div></div></div>
+<button class="btn btn-primary">メモを書く</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:22px;max-width:620px">
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:var(--color-accent-2-700)">引用 · p.182</span><span style="font-size:17px;font-style:italic;line-height:1.7">「退屈と向き合うことは、自分の生活を取り戻すことでもある。」</span></div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:var(--color-neutral-700)">メモ · p.140</span><span style="font-size:15px;line-height:1.7">パスカルの「部屋でじっとしていられない」話。気晴らしの定義が思っていたより広い。</span></div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:var(--color-accent-2-700)">引用 · p.96</span><span style="font-size:17px;font-style:italic;line-height:1.7">「人は楽しみを求めているのではなく、興奮を求めている。」</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="width:1200px;height:760px;background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden;display:flex;flex-direction:column;position:relative">
+<div style="height:36px;flex:none;background:var(--color-neutral-200);display:flex;align-items:center;gap:8px;padding:0 14px"><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="width:10px;height:10px;border-radius:50%;background:var(--color-neutral-400)"></span><span style="margin-left:16px;font-size:12px;color:var(--color-neutral-700);background:var(--color-bg);padding:3px 12px;border-radius:2px;width:360px">notes.app/library</span></div>
+<div style="flex:1;display:grid;grid-template-columns:64px 320px 1fr">
+<div style="background:var(--color-surface)"></div><div style="background:var(--color-neutral-100)"></div><div></div>
+</div>
+<div style="position:absolute;inset:36px 0 0 0;background:color-mix(in srgb,var(--color-neutral-900) 45%,transparent);display:flex;justify-content:center;padding-top:80px">
+<div style="width:640px;align-self:flex-start;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;padding:18px 22px"><i class="ph-duotone ph-magnifying-glass" style="font-size:22px;color:var(--color-accent)"></i><span style="flex:1;font-size:20px">暇と退屈<span style="display:inline-block;width:1.5px;height:22px;background:var(--color-accent);vertical-align:middle;margin-left:2px"></span></span><span style="font-size:11px;color:var(--color-neutral-700)">esc</span></div>
+<div style="padding:4px 12px 16px;display:flex;flex-direction:column;gap:4px">
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:10px 10px 4px">本棚</div>
+<div style="display:flex;gap:12px;align-items:center;padding:8px 10px;background:var(--color-accent-100);border-radius:2px"><div style="width:28px;height:40px;background:var(--color-neutral-300)"></div><span style="flex:1;font-size:15px;font-weight:600">暇と退屈の倫理学</span><span style="font-size:11px;color:var(--color-accent-800)">開く ↵</span></div>
+<div style="display:flex;gap:12px;align-items:center;padding:8px 10px"><i class="ph-duotone ph-quotes" style="font-size:18px;color:var(--color-accent-2-700);width:28px;text-align:center"></i><span style="flex:1;font-size:14px;font-style:italic">「退屈と向き合うことは…」 p.182</span></div>
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:14px 10px 4px">本を追加</div>
+<sc-for list="{{ newResults }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;gap:12px;align-items:center;padding:8px 10px"><div style="width:28px;height:40px;background:var(--color-neutral-300)"></div><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:600">{{ r.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ r.a }} · {{ r.p }}</span></div><i class="ph-duotone ph-plus" style="color:var(--color-accent)"></i></div>
+</sc-for>
+<div style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);padding:14px 10px 4px">操作</div>
+<div style="display:flex;gap:12px;align-items:center;padding:8px 10px;font-size:14px"><i class="ph-duotone ph-barcode" style="font-size:18px;width:28px;text-align:center"></i>ISBNで追加</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">次の候補：「<a class="dv-oid" href="#2a">2a</a> のサイドバーに <a class="dv-oid" href="#2c">2c</a> の ⌘K を足す」 · 「<a class="dv-oid" href="#2b">2b</a> で本の詳細ページを作る」 · 「いずれかを選んで個別デザインへ」</p>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">ベースデザイン — 共通パーツと代表4画面（iPhone）</span></div>
+
+<div style="max-width:760px;margin:0 0 36px;font-size:14px;line-height:1.75;color:var(--color-text)">
+<p style="margin:0 0 8px"><b>前提：</b>iPhone向け・日本語UI・表紙はプレースホルダー。記録は「ページ付きの引用・メモ」「読書進捗」「読了の振り返り」をバランスよく扱う想定です。</p>
+<p style="margin:0"><b>方針：</b>Broadsheet の紙面構成をそのまま使い、区切り線や枠を使わず余白と明朝の字面で階層を作ります。和文は Noto Serif JP を Source Serif 4 の後ろに補っています。シアンは操作要素と進捗、マゼンタは引用（ハイライト）にだけ使います。</p>
+</div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>共通パーツ</div>
+<div style="width:760px;background:var(--color-bg);border-radius:4px;box-shadow:var(--shadow-md);padding:48px;display:flex;flex-direction:column;gap:48px">
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<h6 style="margin:0;color:var(--color-neutral-700)">文字組み</h6>
+<div style="font-size:34px;font-weight:600;line-height:1.15;letter-spacing:-0.01em">本棚 — 画面タイトル 34</div>
+<div style="font-size:22px;font-weight:600;line-height:1.3">書名 · セクション見出し 22</div>
+<div style="font-size:16px;line-height:1.7">本文とメモ。読んだ箇所に残す短い言葉は、あとから読み返したときに自分の考えの変化を映します。16</div>
+<div style="font-size:17px;font-style:italic;line-height:1.7;color:var(--color-accent-2-700)">「引用は本文より一段柔らかく、イタリックで組む。」17 italic</div>
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">著者名 · p.182 · 2026年9月24日 — 補足情報 12</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<h6 style="margin:0;color:var(--color-neutral-700)">ボタン</h6>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+<button class="btn btn-primary"><i class="ph-duotone ph-pencil-simple-line" style="font-size:17px"></i>メモを書く</button>
+<button class="btn btn-secondary">進捗を記録</button>
+<button class="btn btn-ghost">すべて見る</button>
+<button class="btn btn-icon btn-secondary"><i class="ph-duotone ph-plus" style="font-size:18px"></i></button>
+</div>
+<h6 style="margin:12px 0 0;color:var(--color-neutral-700)">タグ・状態</h6>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<span class="tag tag-accent">読書中</span><span class="tag tag-neutral">積読</span><span class="tag tag-outline">読了</span><span class="tag tag-accent-2">引用</span><span class="tag tag-neutral">#哲学</span>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<h6 style="margin:0;color:var(--color-neutral-700)">進捗</h6>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-700)"><span>p.182 / 320</span><span>57%</span></div>
+<div style="height:3px;background:var(--color-neutral-300);border-radius:2px"><div style="width:57%;height:100%;background:var(--color-accent);border-radius:2px"></div></div>
+</div>
+<h6 style="margin:12px 0 0;color:var(--color-neutral-700)">評価</h6>
+<div style="display:flex;gap:4px;color:var(--color-accent);font-size:20px"><i class="ph-duotone ph-star"></i><i class="ph-duotone ph-star"></i><i class="ph-duotone ph-star"></i><i class="ph-duotone ph-star"></i><i class="ph-duotone ph-star" style="color:var(--color-neutral-400)"></i></div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:auto 1fr;gap:40px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:14px">
+<h6 style="margin:0;color:var(--color-neutral-700)">表紙（プレースホルダー）</h6>
+<div style="display:flex;gap:14px;align-items:flex-end">
+<div style="width:96px;height:140px;background:var(--color-accent-200);border-radius:2px;box-shadow:var(--shadow-sm);padding:10px;display:flex;flex-direction:column;justify-content:space-between;color:var(--color-accent-900)"><span style="font-size:12px;font-weight:600;line-height:1.3">暇と退屈の倫理学</span><span style="font-size:9px">國分功一郎</span></div>
+<div style="width:64px;height:94px;background:var(--color-accent-2-200);border-radius:2px;box-shadow:var(--shadow-sm);padding:7px;display:flex;flex-direction:column;justify-content:space-between;color:var(--color-accent-2-900)"><span style="font-size:9px;font-weight:600;line-height:1.3">書名</span><span style="font-size:7px">著者</span></div>
+<div style="width:44px;height:64px;background:var(--color-neutral-300);border-radius:1px;box-shadow:var(--shadow-sm)"></div>
+</div>
+<div style="font-size:11px;color:var(--color-neutral-700)">L 96 · M 64 · S 44 — 実画像が入れば差し替え</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<h6 style="margin:0;color:var(--color-neutral-700)">メモ・引用の単位</h6>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="font-size:12px;color:var(--color-accent-2-700);letter-spacing:0.04em">引用 · p.182</div>
+<div style="font-size:16px;font-style:italic;line-height:1.7">「退屈と向き合うことは、自分の生活を取り戻すことでもある。」</div>
+<div style="font-size:14px;line-height:1.7;color:var(--color-neutral-800)">通勤中に読んで一番刺さった箇所。第4章と合わせて読み返す。</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<h6 style="margin:0;color:var(--color-neutral-700)">入力</h6>
+<div style="display:grid;grid-template-columns:120px 1fr;gap:16px">
+<div class="field"><label>ページ</label><input class="input" value="182"></div>
+<div class="field"><label>メモ</label><input class="input" placeholder="気づいたことを一行で"></div>
+</div>
+<div style="display:flex;gap:10px"><div class="seg"><label class="seg-opt" style="background:var(--color-accent);color:var(--color-bg)"><input type="radio" name="k0">引用</label><label class="seg-opt"><input type="radio" name="k0">メモ</label><label class="seg-opt"><input type="radio" name="k0">感想</label></div></div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<h6 style="margin:0;color:var(--color-neutral-700)">タブバー</h6>
+<div style="display:flex;justify-content:space-around;max-width:390px;padding:10px 0;background:var(--color-bg);box-shadow:var(--shadow-sm);border-radius:2px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-accent);font-size:10px"><i class="ph-duotone ph-books" style="font-size:24px"></i>本棚</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-quotes" style="font-size:24px"></i>メモ</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-chart-line-up" style="font-size:24px"></i>振り返り</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-magnifying-glass" style="font-size:24px"></i>探す</div>
+</div>
+</div>
+
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>本棚（ホーム）</div>
+<div style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;border:10px solid var(--color-text);overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:16px 30px 0;font-size:14px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;font-size:15px"><i class="ph-duotone ph-cell-signal-full"></i><i class="ph-duotone ph-wifi-high"></i><i class="ph-duotone ph-battery-full"></i></span></div>
+<div style="flex:1;overflow:hidden;padding:28px 24px 0;display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;justify-content:space-between;align-items:flex-end">
+<div><div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">2026年9月25日 · 42冊</div><div style="font-size:34px;font-weight:600;line-height:1.15">本棚</div></div>
+<button class="btn btn-icon btn-primary" style="border-radius:50%;width:40px;height:40px"><i class="ph-duotone ph-plus" style="font-size:20px"></i></button>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">いま読んでいる</div>
+<div style="display:flex;gap:18px">
+<div style="width:96px;height:140px;flex:none;background:var(--color-accent-200);border-radius:2px;box-shadow:var(--shadow-md);padding:10px;display:flex;flex-direction:column;justify-content:space-between;color:var(--color-accent-900)"><span style="font-size:12px;font-weight:600;line-height:1.3">暇と退屈の倫理学</span><span style="font-size:9px">國分功一郎</span></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">
+<div style="font-size:20px;font-weight:600;line-height:1.3">暇と退屈の倫理学</div>
+<div style="font-size:12px;color:var(--color-neutral-700)">國分功一郎 · メモ 12件</div>
+<div style="flex:1"></div>
+<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-700)"><span>p.182 / 320</span><span>57%</span></div>
+<div style="height:3px;background:var(--color-neutral-300);border-radius:2px"><div style="width:57%;height:100%;background:var(--color-accent)"></div></div>
+</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div class="seg"><label class="seg-opt" style="background:var(--color-accent);color:var(--color-bg)"><input type="radio" name="s1">すべて</label><label class="seg-opt"><input type="radio" name="s1">読了</label><label class="seg-opt"><input type="radio" name="s1">積読</label></div>
+<i class="ph-duotone ph-sort-ascending" style="font-size:20px;color:var(--color-neutral-700)"></i>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px 16px">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="aspect-ratio:2/3;background:var(--color-accent-2-200);border-radius:2px;box-shadow:var(--shadow-sm);padding:8px;color:var(--color-accent-2-900);font-size:11px;font-weight:600;line-height:1.3">サピエンス全史</div><span style="font-size:11px;color:var(--color-neutral-700)">読了 · ★4</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="aspect-ratio:2/3;background:var(--color-neutral-300);border-radius:2px;box-shadow:var(--shadow-sm);padding:8px;color:var(--color-neutral-900);font-size:11px;font-weight:600;line-height:1.3">こころ</div><span style="font-size:11px;color:var(--color-neutral-700)">読了 · ★5</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="aspect-ratio:2/3;background:var(--color-accent-100);border-radius:2px;box-shadow:var(--shadow-sm);padding:8px;color:var(--color-accent-900);font-size:11px;font-weight:600;line-height:1.3">影響力の武器</div><span style="font-size:11px;color:var(--color-neutral-700)">積読</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="aspect-ratio:2/3;background:var(--color-neutral-200);border-radius:2px;box-shadow:var(--shadow-sm);padding:8px;color:var(--color-neutral-900);font-size:11px;font-weight:600;line-height:1.3">三体</div><span style="font-size:11px;color:var(--color-neutral-700)">読了 · ★5</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="aspect-ratio:2/3;background:var(--color-accent-2-100);border-radius:2px;box-shadow:var(--shadow-sm);padding:8px;color:var(--color-accent-2-900);font-size:11px;font-weight:600;line-height:1.3">利己的な遺伝子</div><span style="font-size:11px;color:var(--color-neutral-700)">積読</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="aspect-ratio:2/3;background:var(--color-accent-300);border-radius:2px;box-shadow:var(--shadow-sm);padding:8px;color:var(--color-accent-900);font-size:11px;font-weight:600;line-height:1.3">ファスト＆スロー</div><span style="font-size:11px;color:var(--color-neutral-700)">読了 · ★3</span></div>
+</div>
+</div>
+</div>
+<div style="display:flex;justify-content:space-around;padding:10px 0 30px;background:var(--color-bg);box-shadow:0 -1px 8px color-mix(in srgb,#2d2b2b 8%,transparent)">
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-accent);font-size:10px"><i class="ph-duotone ph-books" style="font-size:24px"></i>本棚</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-quotes" style="font-size:24px"></i>メモ</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-chart-line-up" style="font-size:24px"></i>振り返り</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-magnifying-glass" style="font-size:24px"></i>探す</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>本の詳細</div>
+<div style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;border:10px solid var(--color-text);overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:16px 30px 0;font-size:14px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;font-size:15px"><i class="ph-duotone ph-cell-signal-full"></i><i class="ph-duotone ph-wifi-high"></i><i class="ph-duotone ph-battery-full"></i></span></div>
+<div style="display:flex;justify-content:space-between;padding:14px 16px 0;color:var(--color-accent)"><i class="ph-duotone ph-caret-left" style="font-size:24px"></i><i class="ph-duotone ph-dots-three" style="font-size:24px"></i></div>
+<div style="flex:1;overflow:hidden;padding:16px 24px 0;display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;gap:18px;align-items:flex-end">
+<div style="width:112px;height:164px;flex:none;background:var(--color-accent-200);border-radius:2px;box-shadow:var(--shadow-md);padding:12px;display:flex;flex-direction:column;justify-content:space-between;color:var(--color-accent-900)"><span style="font-size:13px;font-weight:600;line-height:1.3">暇と退屈の倫理学</span><span style="font-size:10px">國分功一郎</span></div>
+<div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+<span class="tag tag-accent" style="align-self:flex-start">読書中</span>
+<div style="font-size:22px;font-weight:600;line-height:1.3">暇と退屈の倫理学</div>
+<div style="font-size:12px;color:var(--color-neutral-700)">國分功一郎 · 新潮文庫</div>
+<div style="font-size:12px;color:var(--color-neutral-700)">9月3日から · 23日目</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-neutral-700)"><span>p.182 / 320</span><span>57%</span></div>
+<div style="height:3px;background:var(--color-neutral-300);border-radius:2px"><div style="width:57%;height:100%;background:var(--color-accent)"></div></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<button class="btn btn-primary"><i class="ph-duotone ph-pencil-simple-line" style="font-size:17px"></i>メモを書く</button>
+<button class="btn btn-secondary">進捗を記録</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:22px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:20px;font-weight:600">メモ 12件</div><span style="font-size:12px;color:var(--color-neutral-700)">ページ順</span></div>
+<div style="display:flex;flex-direction:column;gap:5px">
+<div style="font-size:12px;color:var(--color-accent-2-700);letter-spacing:0.04em">引用 · p.182</div>
+<div style="font-size:16px;font-style:italic;line-height:1.7">「退屈と向き合うことは、自分の生活を取り戻すことでもある。」</div>
+<div style="font-size:14px;line-height:1.7;color:var(--color-neutral-800)">第4章と合わせて読み返す。</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px">
+<div style="font-size:12px;color:var(--color-neutral-700);letter-spacing:0.04em">メモ · p.140</div>
+<div style="font-size:14px;line-height:1.7">パスカルの「部屋でじっとしていられない」話。気晴らしの定義が思っていたより広い。</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px">
+<div style="font-size:12px;color:var(--color-accent-2-700);letter-spacing:0.04em">引用 · p.96</div>
+<div style="font-size:16px;font-style:italic;line-height:1.7">「人は楽しみを求めているのではなく、興奮を求めている。」</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>メモ・引用の記録</div>
+<div style="width:390px;height:844px;background:var(--color-neutral-700);border-radius:48px;border:10px solid var(--color-text);overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="height:64px"></div>
+<div style="flex:1;background:var(--color-bg);border-radius:14px 14px 0 0;padding:12px 24px 0;display:flex;flex-direction:column;gap:24px">
+<div style="width:36px;height:5px;border-radius:3px;background:var(--color-neutral-300);align-self:center"></div>
+<div style="display:flex;justify-content:space-between;align-items:center">
+<button class="btn btn-ghost">キャンセル</button>
+<div style="font-size:15px;font-weight:600">新しい記録</div>
+<button class="btn btn-ghost" style="font-weight:600">保存</button>
+</div>
+<div style="display:flex;gap:12px;align-items:center">
+<div style="width:30px;height:44px;flex:none;background:var(--color-accent-200);border-radius:1px;box-shadow:var(--shadow-sm)"></div>
+<div><div style="font-size:14px;font-weight:600">暇と退屈の倫理学</div><div style="font-size:11px;color:var(--color-neutral-700)">國分功一郎</div></div>
+</div>
+<div class="seg" style="display:flex"><label class="seg-opt" style="flex:1;justify-content:center;background:var(--color-accent);color:var(--color-bg)"><input type="radio" name="k1">引用</label><label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="k1">メモ</label><label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="k1">感想</label></div>
+<div style="display:grid;grid-template-columns:110px 1fr;gap:14px">
+<div class="field"><label>ページ</label><input class="input" value="182"></div>
+<div class="field"><label>章</label><input class="input" placeholder="任意"></div>
+</div>
+<div class="field"><label>引用</label><textarea class="input" style="min-height:120px;font-style:italic;font-size:16px;line-height:1.7">退屈と向き合うことは、自分の生活を取り戻すことでもある。</textarea></div>
+<div class="field"><label>自分のメモ</label><textarea class="input" placeholder="なぜ残したいか、思ったこと" style="min-height:90px"></textarea></div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="tag tag-accent">#生き方</span><span class="tag tag-neutral">#哲学</span><button class="btn btn-ghost" style="font-size:12px"><i class="ph-duotone ph-plus"></i>タグ</button></div>
+<div style="display:flex;gap:18px;color:var(--color-accent);font-size:22px"><i class="ph-duotone ph-camera"></i><i class="ph-duotone ph-text-aa"></i></div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>振り返り</div>
+<div style="width:390px;height:844px;background:var(--color-bg);border-radius:48px;border:10px solid var(--color-text);overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;padding:16px 30px 0;font-size:14px;font-weight:600"><span>9:41</span><span style="display:flex;gap:5px;font-size:15px"><i class="ph-duotone ph-cell-signal-full"></i><i class="ph-duotone ph-wifi-high"></i><i class="ph-duotone ph-battery-full"></i></span></div>
+<div style="flex:1;overflow:hidden;padding:28px 24px 0;display:flex;flex-direction:column;gap:32px">
+<div><div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">2026年</div><div style="font-size:34px;font-weight:600;line-height:1.15">振り返り</div></div>
+<div style="display:flex;align-items:flex-end;gap:14px">
+<div class="cmyk-num" style="font-size:120px;font-weight:600"><span class="paper">42</span><span class="plate plate-c" aria-hidden="true">42</span><span class="plate plate-m" aria-hidden="true">42</span><span class="plate plate-y" aria-hidden="true">42</span></div>
+<div style="padding-bottom:10px;display:flex;flex-direction:column;gap:2px"><span style="font-size:20px;font-weight:600">冊 読了</span><span style="font-size:12px;color:var(--color-neutral-700)">目標 50冊まで あと8冊</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">月ごとの読了</div>
+<div style="display:flex;align-items:flex-end;gap:8px;height:96px">
+<div style="flex:1;height:40%;background:var(--color-accent-300)"></div><div style="flex:1;height:60%;background:var(--color-accent-300)"></div><div style="flex:1;height:30%;background:var(--color-accent-300)"></div><div style="flex:1;height:80%;background:var(--color-accent-300)"></div><div style="flex:1;height:50%;background:var(--color-accent-300)"></div><div style="flex:1;height:70%;background:var(--color-accent-300)"></div><div style="flex:1;height:100%;background:var(--color-accent-300)"></div><div style="flex:1;height:60%;background:var(--color-accent-300)"></div><div style="flex:1;height:45%;background:var(--color-accent)"></div>
+</div>
+<div style="display:flex;gap:8px;font-size:10px;color:var(--color-neutral-700)"><span style="flex:1;text-align:center">1</span><span style="flex:1;text-align:center">2</span><span style="flex:1;text-align:center">3</span><span style="flex:1;text-align:center">4</span><span style="flex:1;text-align:center">5</span><span style="flex:1;text-align:center">6</span><span style="flex:1;text-align:center">7</span><span style="flex:1;text-align:center">8</span><span style="flex:1;text-align:center;color:var(--color-accent-700)">9</span></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+<div><div style="font-size:24px;font-weight:600">11,480</div><div style="font-size:11px;color:var(--color-neutral-700)">ページ</div></div>
+<div><div style="font-size:24px;font-weight:600">186</div><div style="font-size:11px;color:var(--color-neutral-700)">メモ・引用</div></div>
+<div><div style="font-size:24px;font-weight:600">#哲学</div><div style="font-size:11px;color:var(--color-neutral-700)">よく読む分野</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-2-700)">今月いちばん残した言葉</div>
+<div style="font-size:17px;font-style:italic;line-height:1.7">「人は楽しみを求めているのではなく、興奮を求めている。」</div>
+<div style="font-size:12px;color:var(--color-neutral-700)">暇と退屈の倫理学 · p.96</div>
+</div>
+</div>
+<div style="display:flex;justify-content:space-around;padding:10px 0 30px;background:var(--color-bg);box-shadow:0 -1px 8px color-mix(in srgb,#2d2b2b 8%,transparent)">
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-books" style="font-size:24px"></i>本棚</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-quotes" style="font-size:24px"></i>メモ</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-accent);font-size:10px"><i class="ph-duotone ph-chart-line-up" style="font-size:24px"></i>振り返り</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--color-neutral-700);font-size:10px"><i class="ph-duotone ph-magnifying-glass" style="font-size:24px"></i>探す</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">次の候補：「<a class="dv-oid" href="#1b">1b</a> の本棚を背表紙表示で別案」 · 「<a class="dv-oid" href="#1d">1d</a> にカメラで引用を読み取る流れを追加」 · 「検索・本の追加画面を作る」</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const books = [
+      { t: 'サピエンス全史', a: 'ユヴァル・ノア・ハラリ', s: '読了 · ★4' },
+      { t: 'こころ', a: '夏目漱石', s: '読了 · ★5' },
+      { t: '影響力の武器', a: 'ロバート・チャルディーニ', s: '積読' },
+      { t: '三体', a: '劉慈欣', s: '読了 · ★5' },
+      { t: '利己的な遺伝子', a: 'リチャード・ドーキンス', s: '積読' },
+      { t: 'ファスト＆スロー', a: 'ダニエル・カーネマン', s: '読了 · ★3' },
+      { t: '正義の教室', a: '飲茶', s: '読了 · ★4' },
+      { t: '銃・病原菌・鉄', a: 'ジャレド・ダイアモンド', s: '積読' }
+    ];
+    const results = [
+      { t: '暇と退屈の倫理学', a: '國分功一郎', p: '新潮文庫 · 2021', added: true, notAdded: false },
+      { t: '暇と退屈の倫理学 増補新版', a: '國分功一郎', p: '太田出版 · 2015', added: false, notAdded: true },
+      { t: '退屈とポスト・トゥルース', a: 'マーク・キングウェル', p: '集英社 · 2021', added: false, notAdded: true },
+      { t: '暇つぶしの時代', a: '橘木俊詔', p: '平凡社 · 2004', added: false, notAdded: true }
+    ];
+    return { books, books6: books.slice(0, 6), results, newResults: results.slice(1) };
+  }
+}
+</script>
+</body>
+</html>

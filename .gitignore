@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.py[cod]
+reading.db
+reading.db-wal
+reading.db-shm
+.env
+node_modules/
+frontend/dist/
+.pytest_cache/
