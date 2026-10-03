@@ -24,6 +24,8 @@ Webは3ペイン（アイコンレール／一覧／詳細）＋ ⌘K コマン�
 | レポート執筆（スマホ） | ハーフシート | `Notes Report.dc.html` #4b |
 | モバイル全体 | タブバー＋単一画面（7画面） | `Notes Mobile.dc.html` #7a〜#7g（部品は `Notes Base Design.dc.html` #1a） |
 | レポートのエディタ（PC） | Markdown 2ペイン＋メモ・記法のフローティング窓 | `Notes Report.dc.html` #6a（4a の本文エディタを置き換える。Notes Web には未統合） |
+| カテゴリとタグの表示 | 8b 形で分ける（カテゴリ＝塗りのタグ、タグ＝#文字） | `Notes Category Tag.dc.html` #8b（Notes Web・Mobile に反映済み） |
+| おすすめ | Web はレールに追加、スマホは本棚の中＋一覧＋シート | `Notes Web.dc.html` ／ `Notes Mobile.dc.html` #7a・#7h・#7i |
 | 次に読む本 | 読了時ダイアログ | `Notes Next Book.dc.html` #5a（Notes Web には未統合） |
 
 ---
@@ -150,6 +152,23 @@ Webは3ペイン（アイコンレール／一覧／詳細）＋ ⌘K コマン�
   - 記法: 12行。左に記法（13px `--color-neutral-800`、pre）、右に表示見本（実際の書体・太さ・色で）。クリックで挿入。フッター「クリックで挿入 · 太字・斜体は選択範囲を囲む」。
 - スマホ（4b）も同じ Markdown 原文を扱う。アクセサリバーは [メモ] [見出し] [p.◯ 章メモ] のまま、ハーフシートにも「記法」タブを付ける。プレビューは「読む」表示への切り替えで見る（2ペインにはしない）。
 
+### I. カテゴリとタグ（8b「形で分ける」）— `Notes Category Tag.dc.html` #8b
+- **カテゴリ**: 1冊に1つ。小説 / ビジネス・実用 / エッセイ / 学術 / 雑誌 / その他。**塗りのタグ（`.tag.tag-neutral`）**で表示する。
+- **タグ**: 1冊に複数。自由入力。**枠なしの「#」文字**で表示する。
+- 色分けはしない（カテゴリごとの色は作らない）。シアンは操作、マゼンタは引用だけ、というルールは変えない。
+- 一覧の行: 書名 14px/600 → 状態のメタ 11px（状態は**文字**で表示し、行にタグを2つ並べない）→ `[カテゴリ 10px, padding 1px 6px]` ＋ `#哲学 #生き方` 11px `--color-neutral-700`。
+- 本の詳細: `[状態 .tag-accent等] [カテゴリ .tag-neutral ▾]` → 書名 → 著者・出版社 → タグ行（`#タグ` 13px `--color-accent-700`、最後に「＋ タグ」`--color-neutral-700`）。
+  - カテゴリのタグをクリックすると、6つの選択肢がその場に並ぶ（選択中は `--color-accent` の塗り、他は `--color-neutral-200`）。
+  - タグをクリックすると、本棚をそのタグで絞り込む。「＋ タグ」で入力欄（Enter で追加、Esc で終了）。編集中は各タグに × が付き、クリックで外す。
+- 本棚の絞り込み（一覧ペイン）: 状態のセグメント → カテゴリのチップ（`すべて / 小説 / …`、選択中は `--color-accent` の塗り、他は `--color-neutral-200`）→「タグ」行（よく使う8つを `#文字` で並べ、選択中は `--color-accent-700` と下線、もう一度押すと解除）。状態・カテゴリ・タグの条件はすべて同時に効く。0件のときは「このカテゴリの本はありません。」
+
+### J. おすすめ（レールに追加）
+- レールの4つ目: 「おすすめ」`ph-book-bookmark`。順番は 本棚 / メモ / 振り返り / おすすめ。
+- データ: アプリが持っているおすすめ本のリスト `Recommendation { id, title, author, publisher, pages, category, reason }`。**本棚にある本（書名で一致）と「興味なし」にした本は表示しない**。この画面で追加した本は「積読に追加済み」として、そのまま一覧に残す。
+- 一覧ペイン: 「おすすめ」＋ 冊数、説明「Notes が選んだ本のリストです。本棚にある本は表示しません。」、カテゴリのチップ、行（表紙 36×52 ＋ 書名 ＋ `著者 · カテゴリ`。追加済みの行は `--color-accent-700` で「積読に追加済み」）。
+- 詳細ペイン: 表紙 120×176 ＋ カテゴリ（`.tag-neutral`）＋ 書名 32px ＋ `著者 · 出版社 · nページ` → 「おすすめの理由」（12px `--color-accent-700`）＋ 理由 18px/lh1.8 → [積読に追加（primary）] [興味なし（ghost）]。追加後は「✓ 積読に追加しました」＋ [本棚で開く]。注記「「興味なし」にした本は、このリストに表示しません。」
+- 読了したときの提案（G / 5a）とは別の機能。こちらはいつでも見られる固定のリスト。
+
 ### F. トースト
 - 右下（right 32px, bottom 28px）、地 `--color-text`、文字 `--color-bg`、14px、`ph-check-circle`（`--color-accent-300`）、2.4秒で消える。
 
@@ -201,6 +220,15 @@ Webは3ペイン（アイコンレール／一覧／詳細）＋ ⌘K コマン�
   - 記法: 2列（記法 14px `--color-neutral-800` ／ 仕上がりの見本）。見出し・章・太字・引用・箇条書き・チェックリスト・斜体（残りの記法はスクロールした先）。インライン記法は選択範囲を囲む。
   - **タップするとカーソル位置に挿入し、シートを自動で閉じる**。挿入のルールは Web の H と同じ（ブロックは独立した段落にする）。フッター「タップでカーソル位置に挿入し、シートを閉じる」。
 
+### 7a・7b へのカテゴリ／タグの追加（8b）
+- 7a: 状態のセグメントの下に、カテゴリのチップを横スクロールで並べる。一覧の行は Web と同じく `[カテゴリ]` ＋ `#タグ`。
+- 7b: 状態タグの横にカテゴリ（`.tag-neutral` ▾、タップで選択シート）。著者の下にタグ行（`#タグ` `--color-accent-700` ＋「＋ タグ」）。タグをタップすると、そのタグで絞り込んだ本棚を開く。
+
+### 7a のおすすめ・7h おすすめ一覧・7i おすすめの詳細
+- タブは増やさない。7a の「いま読んでいる」の下に「おすすめ · n冊」と「すべて見る ›」、表紙 84×122 の横スクロール（書名 12px/600 ＋ カテゴリ 10px）。
+- 7h（「すべて見る」から開く）: ‹ 本棚 ／「本棚にない本 · n冊」＋「おすすめ」34px ／ カテゴリのチップ（横スクロール）／ 行: 表紙 52×76 ＋ 書名 16px/600 ＋ `[カテゴリ] 著者` ＋ 理由 13px ＋ 右に + ボタン（44×44、secondary）。追加済みは ✓（`--color-accent-100` 地）。
+- 7i（行をタップ）: 高さ 64% のシート。表紙 88×128 ＋ カテゴリ ＋ 書名 22px ＋ メタ → おすすめの理由 16px/lh1.8 → [積読に追加（primary、残りの幅）] [興味なし（ghost）]、注記 11px。下にスワイプで閉じる。
+
 ### 7g 読了 → 次に読む本（5a のモバイル版）
 - 読了にしたときに一度だけ出す、ほぼ全画面のシート（上 54px は背後の画面が暗く見える、radius 14px 14px 0 0）。
 - ヘッダー: `読了 · 23日間 · 引用・メモ 6件` 12px `--color-accent-700` ＋「『書名』を読み終えました」22px/600 ＋ ★ 28px（タップで評価）。
@@ -223,9 +251,10 @@ Webは3ペイン（アイコンレール／一覧／詳細）＋ ⌘K コマン�
 
 ## State Management
 ```
-Book { id, title, author, publisher, status: 'reading'|'done'|'tsundoku', page, total, rating(0-5), startedAt, coverUrl?, recommend: 'strong'|'some'|'self', reportHtml }
+Book { id, title, author, publisher, category: '小説'|'ビジネス・実用'|'エッセイ'|'学術'|'雑誌'|'その他', tags: string[], status: 'reading'|'done'|'tsundoku', page, total, rating(0-5), startedAt, coverUrl?, recommend: 'strong'|'some'|'self', reportHtml }
 Note { id, bookId, kind: 'quote'|'memo', page, text, memo?, createdAt }
-UI   { view: 'library'|'notes'|'review'|'settings', libraryFilter, selectedBookId, noteFilter, selectedNoteId,
+Recommendation { id, title, author, publisher, pages, category, reason }   // アプリが持っているリスト
+UI   { view: 'library'|'notes'|'review'|'settings'|'recs', libraryFilter, categoryFilter, tagFilter, recCategory, selectedRecId, dismissedRecIds, selectedBookId, noteFilter, selectedNoteId,
        palette: { open, query }, inlineEdit: 'none'|'note'|'progress', draft{kind,page,text,memo},
        writing: { open, bookId }, memoWindow: { open, minimized, x, y, filter },
        period, settings: { yearlyGoal, sort: 'recent'|'title'|'progress', quoteStyle: 'italic'|'plain' },
@@ -254,10 +283,11 @@ UI   { view: 'library'|'notes'|'review'|'settings', libraryFilter, selectedBookI
 - 本や引用の内容はすべて仮のデータ。
 
 ## Files
-- `Notes Web.dc.html` — **Web 版の本体（採用）**。本棚／メモ・引用／振り返り／設定／⌘K／レポート執筆モード（4a 統合）。
+- `Notes Web.dc.html` — **Web 版の本体（採用）**。本棚（カテゴリ・タグで絞り込み）／メモ・引用／振り返り／おすすめ／設定／⌘K／レポート執筆モード（4a 統合）。
 - `Notes Report.dc.html` — 執筆モードの比較案。**#6a（Markdown エディタ）・#4a（PC のメモ窓）・#4b（スマホ）が採用**。#3a〜3c と #4c〜4d は不採用。
-- `Notes Mobile.dc.html` — **モバイル版の本体（採用）**。#7a 本棚 / #7b 本の詳細 / #7c 探す / #7d メモ / #7e 振り返り / #7f レポート（Markdown＋ハーフシート）/ #7g 読了→次に読む本。
+- `Notes Mobile.dc.html` — **モバイル版の本体（採用）**。#7a 本棚 / #7b 本の詳細 / #7c 探す / #7d メモ / #7e 振り返り / #7f レポート（Markdown＋ハーフシート）/ #7g 読了→次に読む本 / #7h おすすめ一覧 / #7i おすすめの詳細。
 - `Notes Base Design.dc.html` — #1a 共通部品（有効）、#1b〜1e モバイルの旧案、#2a〜2c Web のナビゲーション比較（**#2c が採用**）。
+- `Notes Category Tag.dc.html` — カテゴリとタグの見せ方の比較。**#8b が採用**、#8a・#8c は不採用。
 - `Notes Next Book.dc.html` — 次に読む本の比較案。**#5a が採用**、#5b・#5c は不採用。
 - `support.js` — 同梱の `.dc.html` をブラウザで表示するためのランタイム（再実装の対象外）。
 - `_ds/broadsheet-…/styles.css` — デザイントークンと部品クラスの正本。`readme.md` はデザインシステムのガイド。

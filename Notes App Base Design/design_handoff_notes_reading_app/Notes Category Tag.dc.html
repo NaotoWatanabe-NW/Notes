@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/duotone/style.css">
+<script src="_ds/broadsheet-960786eb-8146-4cf6-ab1f-b4f62467b513/_ds_bundle.js"></script>
+<style>:root{--font-heading:"Source Serif 4","Noto Serif JP",serif;--font-body:"Source Serif 4","Noto Serif JP",serif}body{margin:0;background:var(--color-neutral-300);font-family:var(--font-body)}a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}.dv-turn{padding:48px 48px 40px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 24px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#201e1d;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font-size:15px;font-weight:600;color:#201e1d}.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px;width:600px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.1);color:#201e1d;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:1.5;color:var(--color-neutral-800);min-height:36px}.dv-opt:target .dv-oid{background:var(--color-accent);color:#fff}.dv-next{margin:28px 0 0;font-size:13px;color:var(--color-neutral-800)}</style>
+</helmet>
+<section class="dv-turn" id="t8">
+<div class="dv-thd"><a class="dv-tid" href="#t8">8</a><span class="dv-tname">カテゴリとタグの見せ分け — 3案</span></div>
+<div style="max-width:780px;margin:0 0 36px;font-size:14px;line-height:1.75">
+<p style="margin:0">カテゴリは1冊に1つだけの「棚の区分」、タグは1冊にいくつでも付けられる自分用のラベルです。役割が違うので、見た目でも区別します。3案とも同じ4か所（絞り込み、一覧の行、本の詳細、スマホの行）で比べています。色はシアンを操作、マゼンタを引用だけに使うルールのままで、カテゴリやタグの色分けはしません。</p>
+</div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="8a">
+<div class="dv-olabel"><a class="dv-oid" href="#8a">8a</a>見出しラベル型 — カテゴリは書名の上の小見出し（新聞の面名）、タグは「#」付きの文字だけ。枠を使わない</div>
+<div style="background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);padding:32px;display:grid;gap:36px">
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">絞り込み</span>
+<div style="display:grid;grid-template-columns:160px minmax(0,1fr);gap:28px;background:var(--color-neutral-100);padding:20px">
+<div style="display:grid;gap:2px;align-content:start"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-bottom:4px">カテゴリ</span>
+<sc-for list="{{ catIdx }}" as="c" hint-placeholder-count="7"><div style="display:flex;justify-content:space-between;padding:4px 8px;border-radius:2px;font-size:14px;background:{{ c.bg }};color:{{ c.fg }}"><span>{{ c.label }}</span><span style="color:var(--color-neutral-700)">{{ c.n }}</span></div></sc-for>
+</div>
+<div style="display:grid;gap:6px;align-content:start"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700);margin-bottom:4px">タグ</span>
+<div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;line-height:1.7"><sc-for list="{{ tagIdx }}" as="t" hint-placeholder-count="8"><span style="color:{{ t.fg }};font-weight:{{ t.fw }}">#{{ t.label }}<span style="font-size:11px;color:var(--color-neutral-600);margin-left:3px">{{ t.n }}</span></span></sc-for></div>
+</div>
+</div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">一覧の行</span>
+<div style="display:grid;gap:4px;width:320px;background:var(--color-neutral-100);padding:10px">
+<sc-for list="{{ rows }}" as="b" hint-placeholder-count="3"><div style="display:flex;gap:12px;padding:8px;border-radius:2px;background:{{ b.bg }}"><div style="width:36px;height:52px;flex:none;box-shadow:var(--shadow-sm);background:{{ b.cbg }}"></div><div style="display:grid;gap:2px;align-content:start;min-width:0"><span style="font-size:10px;letter-spacing:0.08em;color:var(--color-accent-700)">{{ b.cat }}</span><span style="font-size:14px;font-weight:600;line-height:1.3">{{ b.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ b.tagsHash }}</span></div></div></sc-for>
+</div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">本の詳細</span>
+<div style="display:flex;gap:24px;align-items:flex-end">
+<div style="width:96px;height:140px;flex:none;border-radius:2px;box-shadow:var(--shadow-md);background:var(--color-accent-200)"></div>
+<div style="display:grid;gap:6px"><span style="font-size:12px;letter-spacing:0.08em;color:var(--color-accent-700)">学術</span><span style="font-size:30px;font-weight:600;line-height:1.2">暇と退屈の倫理学</span><span style="font-size:13px;color:var(--color-neutral-700)">國分功一郎 · 新潮文庫 · 読書中</span>
+<div style="display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;margin-top:4px"><sc-for list="{{ detailTags }}" as="t" hint-placeholder-count="3"><span style="color:var(--color-neutral-800)">#{{ t }}</span></sc-for><span style="color:var(--color-accent-700)">＋ タグ</span></div>
+</div></div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">スマホの行（390px）</span>
+<div style="width:350px;display:flex;gap:14px;align-items:center;padding:10px;background:var(--color-neutral-100)"><div style="width:36px;height:52px;flex:none;background:var(--color-accent-200);box-shadow:var(--shadow-sm)"></div><div style="flex:1;display:grid;gap:2px"><span style="font-size:10px;letter-spacing:0.08em;color:var(--color-accent-700)">学術</span><span style="font-size:15px;font-weight:600">暇と退屈の倫理学</span><span style="font-size:12px;color:var(--color-neutral-700)">國分功一郎 · #哲学 #生き方</span></div><i class="ph-duotone ph-caret-right" style="color:var(--color-neutral-500)"></i></div>
+</div>
+<div style="font-size:13px;line-height:1.7;color:var(--color-neutral-800)"><b>向いている点:</b> 紙面の書き方にいちばん近く、静かな表示になります。<b>気になる点:</b> タグを押せることが伝わりにくいので、カーソルを乗せたときにシアンへ変えます。</div>
+</div>
+</div>
+
+<div class="dv-opt" id="8b">
+<div class="dv-olabel"><a class="dv-oid" href="#8b">8b</a>形で分ける — カテゴリは塗りのタグ（面）、タグは枠なしの「#」文字（線）。並べても一目で区別できる</div>
+<div style="background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);padding:32px;display:grid;gap:36px">
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">絞り込み</span>
+<div style="display:grid;gap:14px;background:var(--color-neutral-100);padding:20px">
+<div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ catChips }}" as="c" hint-placeholder-count="7"><span style="font-size:13px;padding:5px 11px;border-radius:2px;background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</span></sc-for></div>
+<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-size:13px"><span style="font-size:11px;color:var(--color-neutral-700)">タグ</span><sc-for list="{{ tagIdx }}" as="t" hint-placeholder-count="8"><span style="padding:2px 0;color:{{ t.fg2 }};text-decoration:{{ t.deco }};text-underline-offset:4px">#{{ t.label }}</span></sc-for></div>
+</div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">一覧の行</span>
+<div style="display:grid;gap:4px;width:320px;background:var(--color-neutral-100);padding:10px">
+<sc-for list="{{ rows }}" as="b" hint-placeholder-count="3"><div style="display:flex;gap:12px;padding:8px;border-radius:2px;background:{{ b.bg }}"><div style="width:36px;height:52px;flex:none;box-shadow:var(--shadow-sm);background:{{ b.cbg }}"></div><div style="display:grid;gap:4px;align-content:start;min-width:0"><span style="font-size:14px;font-weight:600;line-height:1.3">{{ b.t }}</span><div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px"><span class="tag tag-neutral" style="font-size:10px;padding:1px 6px">{{ b.cat }}</span><span style="color:var(--color-neutral-700)">{{ b.tagsHash }}</span></div></div></div></sc-for>
+</div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">本の詳細</span>
+<div style="display:flex;gap:24px;align-items:flex-end">
+<div style="width:96px;height:140px;flex:none;border-radius:2px;box-shadow:var(--shadow-md);background:var(--color-accent-200)"></div>
+<div style="display:grid;gap:8px"><div style="display:flex;gap:6px"><span class="tag tag-accent">読書中</span><span class="tag tag-neutral">学術</span></div><span style="font-size:30px;font-weight:600;line-height:1.2">暇と退屈の倫理学</span><span style="font-size:13px;color:var(--color-neutral-700)">國分功一郎 · 新潮文庫</span>
+<div style="display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px"><sc-for list="{{ detailTags }}" as="t" hint-placeholder-count="3"><span style="color:var(--color-accent-700)">#{{ t }}</span></sc-for><span style="color:var(--color-neutral-700)">＋ タグ</span></div>
+</div></div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">スマホの行（390px）</span>
+<div style="width:350px;display:flex;gap:14px;align-items:center;padding:10px;background:var(--color-neutral-100)"><div style="width:36px;height:52px;flex:none;background:var(--color-accent-200);box-shadow:var(--shadow-sm)"></div><div style="flex:1;display:grid;gap:4px"><span style="font-size:15px;font-weight:600">暇と退屈の倫理学</span><div style="display:flex;gap:6px;align-items:center;font-size:12px"><span class="tag tag-neutral" style="font-size:10px;padding:1px 6px">学術</span><span style="color:var(--color-neutral-700)">#哲学 #生き方</span></div></div><i class="ph-duotone ph-caret-right" style="color:var(--color-neutral-500)"></i></div>
+</div>
+<div style="font-size:13px;line-height:1.7;color:var(--color-neutral-800)"><b>向いている点:</b> 区別がいちばん明確で、今の本棚の部品（状態タグ）とも揃います。<b>気になる点:</b> 状態とカテゴリのタグが並ぶので、行の中では状態を文字だけにします。</div>
+</div>
+</div>
+
+<div class="dv-opt" id="8c">
+<div class="dv-olabel"><a class="dv-oid" href="#8c">8c</a>場所で分ける — カテゴリは一覧の区切り見出しと題字罫の中に置き、行には出さない。行に出すのはタグだけ</div>
+<div style="background:var(--color-bg);border-radius:6px;box-shadow:var(--shadow-md);padding:32px;display:grid;gap:36px">
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">絞り込み</span>
+<div style="display:grid;gap:14px;background:var(--color-neutral-100);padding:20px">
+<div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:var(--color-neutral-700)">並べ方</span><div class="seg"><span class="seg-opt" style="font-size:12px;padding:4px 10px;background:var(--color-accent);color:var(--color-bg)">カテゴリ別</span><span class="seg-opt" style="font-size:12px;padding:4px 10px">追加順</span><span class="seg-opt" style="font-size:12px;padding:4px 10px">書名</span></div></div>
+<div style="display:flex;flex-wrap:wrap;gap:6px"><span style="font-size:11px;color:var(--color-neutral-700);align-self:center;margin-right:4px">タグ</span><sc-for list="{{ tagIdx }}" as="t" hint-placeholder-count="8"><span style="font-size:12px;padding:3px 9px;border-radius:2px;background:{{ t.bg }};color:{{ t.fg3 }}">#{{ t.label }}</span></sc-for></div>
+</div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">一覧（カテゴリ別）</span>
+<div style="display:grid;gap:4px;width:320px;background:var(--color-neutral-100);padding:10px 10px 14px">
+<sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+<div style="display:flex;align-items:baseline;gap:8px;padding:12px 8px 4px"><span style="font-size:16px;font-weight:600">{{ g.cat }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ g.n }}冊</span></div>
+<sc-for list="{{ g.items }}" as="b" hint-placeholder-count="2"><div style="display:flex;gap:12px;padding:6px 8px;border-radius:2px;background:{{ b.bg }}"><div style="width:30px;height:44px;flex:none;box-shadow:var(--shadow-sm);background:{{ b.cbg }}"></div><div style="display:grid;gap:2px;align-content:start;min-width:0"><span style="font-size:14px;font-weight:600;line-height:1.3">{{ b.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ b.tagsHash }}</span></div></div></sc-for>
+</sc-for>
+</div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">本の詳細</span>
+<div style="display:grid;gap:10px">
+<span style="font-size:30px;font-weight:600;line-height:1.2">暇と退屈の倫理学</span>
+<div style="border-top:3px solid var(--color-text);border-bottom:1px solid var(--color-text);padding:8px 0;display:flex;gap:16px;font-size:12px;color:var(--color-neutral-800)"><span style="font-weight:600;color:var(--color-text)">学術</span><span>國分功一郎</span><span>新潮文庫</span><span>読書中 · 57%</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ detailTags }}" as="t" hint-placeholder-count="3"><span style="font-size:12px;padding:3px 9px;border-radius:2px;background:var(--color-neutral-200)">#{{ t }}</span></sc-for><span style="font-size:12px;padding:3px 9px;color:var(--color-accent-700)">＋ タグ</span></div>
+</div></div>
+<div style="display:grid;gap:8px"><span style="font-size:11px;letter-spacing:0.06em;color:var(--color-neutral-700)">スマホの行（390px）</span>
+<div style="width:350px;display:grid;gap:2px;padding:10px;background:var(--color-neutral-100)"><span style="font-size:15px;font-weight:600;padding:0 0 6px">学術 <span style="font-size:11px;font-weight:400;color:var(--color-neutral-700)">14冊</span></span><div style="display:flex;gap:14px;align-items:center"><div style="width:36px;height:52px;flex:none;background:var(--color-accent-200);box-shadow:var(--shadow-sm)"></div><div style="flex:1;display:grid;gap:2px"><span style="font-size:15px;font-weight:600">暇と退屈の倫理学</span><span style="font-size:12px;color:var(--color-neutral-700)">國分功一郎 · #哲学 #生き方</span></div><i class="ph-duotone ph-caret-right" style="color:var(--color-neutral-500)"></i></div></div>
+</div>
+<div style="font-size:13px;line-height:1.7;color:var(--color-neutral-800)"><b>向いている点:</b> 行が軽くなり、本棚がカテゴリ別の目次のように読めます。<b>気になる点:</b> 「追加順」で並べるとカテゴリが行から見えなくなります。</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">次の候補：「選んだ案を <code>Notes Web</code> と <code>Notes Mobile</code> に反映する」 · 「タグの追加・編集の画面を作る」</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const C = ['var(--color-accent-200)', 'var(--color-neutral-300)', 'var(--color-accent-2-100)', 'var(--color-neutral-200)'];
+    const books = [
+      { t: '暇と退屈の倫理学', cat: '学術', tags: ['哲学', '生き方'], c: 0, sel: true },
+      { t: 'こころ', cat: '小説', tags: ['近代文学', '再読'], c: 1 },
+      { t: 'センス・オブ・ワンダー', cat: 'エッセイ', tags: ['自然', '子ども'], c: 2 },
+      { t: 'サピエンス全史', cat: '学術', tags: ['歴史'], c: 3 }
+    ];
+    const row = b => ({ ...b, cbg: C[b.c], bg: b.sel ? 'var(--color-accent-100)' : 'transparent', tagsHash: b.tags.map(t => '#' + t).join(' ') });
+    const CATS = [['すべて', 53], ['小説', 12], ['ビジネス・実用', 8], ['エッセイ', 7], ['学術', 14], ['雑誌', 3], ['その他', 9]];
+    const TAGS = [['哲学', 9], ['生き方', 6], ['歴史', 5], ['再読', 4], ['自然', 3], ['近代文学', 3], ['子ども', 2], ['SF', 2]];
+    return {
+      rows: books.slice(0, 3).map(row),
+      catIdx: CATS.map(([l, n], i) => ({ label: l, n, bg: i === 4 ? 'var(--color-accent-100)' : 'transparent', fg: i === 4 ? 'var(--color-accent-800)' : 'var(--color-text)' })),
+      catChips: CATS.map(([l, n], i) => ({ label: i === 0 ? l : `${l} ${n}`, bg: i === 4 ? 'var(--color-accent)' : 'var(--color-neutral-200)', fg: i === 4 ? 'var(--color-bg)' : 'var(--color-text)' })),
+      tagIdx: TAGS.map(([l, n], i) => ({ label: l, n, fg: i === 0 ? 'var(--color-accent-700)' : 'var(--color-neutral-800)', fw: i === 0 ? '600' : '400', fg2: i === 0 ? 'var(--color-accent-700)' : 'var(--color-neutral-800)', deco: i === 0 ? 'underline' : 'none', bg: i === 0 ? 'var(--color-accent)' : 'var(--color-bg)', fg3: i === 0 ? 'var(--color-bg)' : 'var(--color-text)' })),
+      detailTags: ['哲学', '生き方', '再読したい'],
+      groups: [
+        { cat: '学術', n: 14, items: [row(books[0]), row(books[3])] },
+        { cat: '小説', n: 12, items: [row(books[1])] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
