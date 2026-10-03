@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import Basis, Book, BookStatus, DismissedBook, Note, Suggestion
+from ..models import Basis, Book, BookStatus, DismissedBook, Note, Suggestion, TopicSuggestion
 from ..schemas import BookDetail, Suggestion as SuggestionRead
-from ..schemas import SuggestionSet, SuggestionWrite
+from ..schemas import SuggestionSet, SuggestionSource, SuggestionWithBook, SuggestionWrite
 
 router = APIRouter(prefix="/api", tags=["suggestions"])
 
@@ -44,7 +44,9 @@ def _days_taken(started: date | None, finished: date | None) -> int | None:
     return (finished - started).days + 1
 
 
-def _summary(chosen: set[Basis], distance: str, total: int, dismissed: int) -> str:
+def _summary(
+    chosen: set[Basis], distance: str, total: int, dismissed: int, per_page: int
+) -> str:
     """画面の下に出す、根拠の要約"""
     if total == 0:
         return "条件に合う候補がありません。根拠や距離を変えてみてください。"
@@ -55,7 +57,7 @@ def _summary(chosen: set[Basis], distance: str, total: int, dismissed: int) -> s
         text += f"（{DISTANCE_LABELS[distance]}のみ）"
     if dismissed:
         text += f" — 興味なし {dismissed}件は出していません"
-    if total <= PAGE_SIZE:
+    if total <= per_page:
         text += "。候補はこれで全部です"
     return text
 
@@ -66,6 +68,7 @@ def get_suggestions(
     basis: str = Query(default="note,rating,tag"),
     distance: str = Query(default="both", pattern="^(near|far|both)$"),
     page: int = Query(default=0, ge=0, le=20),
+    per_page: int = Query(default=PAGE_SIZE, ge=1, le=20),
     db: Session = Depends(get_db),
 ):
     """設定しておいた「次に読む本」を返す。
@@ -73,6 +76,8 @@ def get_suggestions(
     - `basis`: `note,rating,tag` のようにカンマ区切り。**最低1つ必要**
     - `distance`: `near`（近い本）/ `far`（少し離れた本）/ `both`
     - `page`: 「出し直す」を押すたびに1つ増やす
+    - `per_page`: 1ページの冊数。既定は読了ダイアログの3冊。
+      本の詳細画面は設定してある候補を全部出したいので大きくして使う
     """
     try:
         chosen = {Basis(part.strip()) for part in basis.split(",") if part.strip()}
@@ -102,8 +107,8 @@ def get_suggestions(
         and not (row.isbn and row.isbn in dismissed)
     ]
 
-    start = page * PAGE_SIZE
-    chunk = matched[start : start + PAGE_SIZE]
+    start = page * per_page
+    chunk = matched[start : start + per_page]
     note_count = len(list(db.scalars(select(Note.id).where(Note.book_id == book_id))))
 
     return SuggestionSet(
@@ -114,9 +119,32 @@ def get_suggestions(
         # 1件も設定していなければ、画面は「まだ検索していません」を出す
         configured=bool(all_rows),
         suggestions=[SuggestionRead.model_validate(row) for row in chunk],
-        summary=_summary(chosen, distance, len(matched), len(dismissed)),
-        has_more=len(matched) > start + PAGE_SIZE,
+        summary=_summary(chosen, distance, len(matched), len(dismissed), per_page),
+        has_more=len(matched) > start + per_page,
     )
+
+
+@router.get("/suggestions", response_model=list[SuggestionWithBook])
+def list_all_suggestions(db: Session = Depends(get_db)):
+    """設定してある「次に読む本」を全部、どの本の候補かを添えて返す（おすすめ一覧用）。
+
+    本ごとに、設定した順で並べる。「興味なし」にした本は外す。
+    本ごとに取ると100回以上の往復になるので、まとめて1回で返す。
+    """
+    dismissed = set(db.scalars(select(DismissedBook.isbn)).all())
+    rows = db.execute(
+        select(Suggestion, Book)
+        .join(Book, Suggestion.book_id == Book.id)
+        .order_by(Book.id, Suggestion.position, Suggestion.id)
+    ).all()
+    return [
+        SuggestionWithBook(
+            **SuggestionRead.model_validate(suggestion).model_dump(),
+            book=SuggestionSource.model_validate(book),
+        )
+        for suggestion, book in rows
+        if not (suggestion.isbn and suggestion.isbn in dismissed)
+    ]
 
 
 @router.put(
@@ -161,7 +189,14 @@ def add_to_shelf(suggestion_id: int, db: Session = Depends(get_db)):
     suggestion = db.get(Suggestion, suggestion_id)
     if suggestion is None:
         raise HTTPException(status_code=404, detail="候補が見つかりません")
+    return shelve(db, suggestion)
 
+
+def shelve(db: Session, suggestion: Suggestion | TopicSuggestion) -> Book:
+    """候補を積読として本棚に入れ、候補に追加済みの印を付ける。
+
+    「次に読む本」とキーワードのおすすめで共通。
+    """
     # すでに同じ ISBN の本があれば、それを使い回す（二重登録を防ぐ）
     existing = None
     if suggestion.isbn:

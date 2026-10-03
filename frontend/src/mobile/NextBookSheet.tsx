@@ -8,9 +8,9 @@ import {
   DISTANCE_LABELS,
   getSuggestions,
 } from '../api'
-import { Cover } from '../components/Cover'
 import { Stars } from '../components/Stars'
 import { Sheet } from './Sheet'
+import { SuggestionRow } from './SuggestionRow'
 
 type Props = {
   bookId: number
@@ -167,55 +167,14 @@ export function NextBookSheet({
             条件に合う候補がありません。根拠や距離を変えてみてください。
           </p>
         ) : (
-          visible.map((suggestion) => {
-            const isAdded = suggestion.added_book_id !== null
-            return (
-              <article key={suggestion.id} className="m-next-card">
-                <Cover
-                  title={suggestion.title}
-                  author={suggestion.author}
-                  src={suggestion.cover_url}
-                />
-                <div className="m-next-main">
-                  <span className="m-next-title">{suggestion.title}</span>
-                  <span className="m-next-sub">
-                    {suggestion.author ?? '著者不明'} ·{' '}
-                    <span
-                      className={
-                        suggestion.basis === 'note' ? 'kind-quote' : 'writing-kicker'
-                      }
-                    >
-                      {BASIS_LABELS[suggestion.basis]}
-                    </span>
-                  </span>
-                  <span className="m-next-reason">{suggestion.reason}</span>
-                  <div className="m-next-actions">
-                    {isAdded ? (
-                      <span className="tag tag-accent">✓ 積読に追加しました</span>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => add(suggestion)}
-                        >
-                          積読に追加
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          style={{ color: 'var(--color-neutral-700)' }}
-                          onClick={() => dismiss(suggestion)}
-                        >
-                          興味なし
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </article>
-            )
-          })
+          visible.map((suggestion) => (
+            <SuggestionRow
+              key={suggestion.id}
+              suggestion={suggestion}
+              onAdd={() => void add(suggestion)}
+              onDismiss={() => void dismiss(suggestion)}
+            />
+          ))
         )}
 
         {data?.configured ? (

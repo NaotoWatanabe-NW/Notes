@@ -166,6 +166,26 @@ def test_引用からメモに種別を変えられる(client):
     assert client.patch(f"/api/notes/{note['id']}", json={"kind": "memo"}).json()["kind"] == "memo"
 
 
+def test_ページを後から足せる(client):
+    # 電子書籍で読んだあと、紙の版のページが分かったときなど
+    book = _create_book(client)
+    note = _create_note(client, book["id"], text="ページ無しで書いたメモ")
+    assert client.patch(f"/api/notes/{note['id']}", json={"page": 96}).json()["page"] == 96
+
+
+def test_ページをnullにして消せる(client):
+    # 電子書籍はページが可変なので、入れた数字を取り消せる必要がある
+    book = _create_book(client)
+    note = _create_note(client, book["id"], page=96)
+    assert client.patch(f"/api/notes/{note['id']}", json={"page": None}).json()["page"] is None
+
+
+def test_更新でページに0を送ると422になる(client):
+    book = _create_book(client)
+    note = _create_note(client, book["id"], page=96)
+    assert client.patch(f"/api/notes/{note['id']}", json={"page": 0}).status_code == 422
+
+
 def test_補足メモをnullにして消せる(client):
     book = _create_book(client)
     note = _create_note(client, book["id"], kind="quote", text="引用", memo="補足")

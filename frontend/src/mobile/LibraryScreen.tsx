@@ -1,7 +1,10 @@
-import type { Book, BookStatus } from '../api'
+import type { Book, BookStatus, Genre } from '../api'
 import { STATUS_LABELS } from '../api'
 import { Cover } from '../components/Cover'
+import { GenreFilterChips, GenreTag } from '../components/GenreChips'
+import { HashText } from '../components/HashTags'
 import { Segmented } from '../components/Segmented'
+import { isVisible } from '../visibility'
 
 type Filter = BookStatus | 'all'
 
@@ -9,6 +12,11 @@ type Props = {
   books: Book[]
   filter: Filter
   onFilter: (next: Filter) => void
+  genreFilter: Genre | null
+  onGenreFilter: (next: Genre | null) => void
+  /** 本の詳細でタグを押して開いたときだけ入る */
+  tagFilter: string | null
+  onTagFilter: (next: string | null) => void
   onSelect: (id: number) => void
   onSearch: () => void
   onSettings: () => void
@@ -32,6 +40,10 @@ export function LibraryScreen({
   books,
   filter,
   onFilter,
+  genreFilter,
+  onGenreFilter,
+  tagFilter,
+  onTagFilter,
   onSelect,
   onSearch,
   onSettings,
@@ -46,7 +58,13 @@ export function LibraryScreen({
     { value: 'finished', label: `読了 ${count('finished')}` },
     { value: 'unread', label: `積読 ${count('unread')}` },
   ]
-  const visible = filter === 'all' ? books : books.filter((b) => b.status === filter)
+  const visible = books.filter((book) =>
+    isVisible(book, {
+      status: filter === 'all' ? null : filter,
+      tag: tagFilter,
+      genre: genreFilter,
+    }),
+  )
 
   return (
     <div className="m-screen m-screen-flush">
@@ -117,11 +135,32 @@ export function LibraryScreen({
         />
       </div>
 
+      {/* カテゴリは1行で横にスクロール（7a） */}
+      <div className="m-bleed" style={{ marginBottom: 14 }}>
+        <GenreFilterChips value={genreFilter} onChange={onGenreFilter} scroll />
+      </div>
+
+      {tagFilter ? (
+        <div className="m-tag-filter">
+          <span>#{tagFilter} で絞り込み中</span>
+          <button
+            type="button"
+            className="m-icon-btn"
+            aria-label="タグの絞り込みを外す"
+            onClick={() => onTagFilter(null)}
+          >
+            <i className="ph-duotone ph-x" />
+          </button>
+        </div>
+      ) : null}
+
       {visible.length === 0 ? (
         <p className="m-empty">
           {books.length === 0
             ? 'まだ本がありません。上の検索から追加できます。'
-            : 'この条件の本はありません。'}
+            : genreFilter
+              ? 'このカテゴリの本はありません。'
+              : 'この条件の本はありません。'}
         </p>
       ) : (
         <div className="m-rows">
@@ -136,6 +175,10 @@ export function LibraryScreen({
               <span className="m-row-main">
                 <span className="m-row-title">{book.title}</span>
                 <span className="m-row-meta">{meta(book)}</span>
+                <span className="row-cats m-row-cats">
+                  <GenreTag genre={book.genre} />
+                  <HashText tags={book.tags} />
+                </span>
               </span>
               <i className="ph-duotone ph-caret-right m-row-caret" />
             </button>

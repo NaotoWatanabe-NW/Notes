@@ -17,8 +17,12 @@ import { ReviewView } from './components/ReviewView'
 import type { SettingsSection } from './components/SettingsPane'
 import { SettingsPane } from './components/SettingsPane'
 import { SettingsView } from './components/SettingsView'
+import { SuggestionsPane } from './components/SuggestionsPane'
+import { SuggestionsView } from './components/SuggestionsView'
 import { Toast } from './components/Toast'
 import type { LibraryFilter, NoteFilter, View } from './types'
+import { groupBySource, markShelved, matchesKeyword } from './suggestionSearch'
+import { useAllSuggestions } from './useAllSuggestions'
 import { filtersRevealing } from './visibility'
 
 export function DesktopShell({ data }: { data: AppData }) {
@@ -52,18 +56,26 @@ export function DesktopShell({ data }: { data: AppData }) {
 
   const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>(null)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [genreFilter, setGenreFilter] = useState<api.Genre | null>(null)
   // 本を追加する画面を出しているか
   const [adding, setAdding] = useState(false)
   const [noteFilter, setNoteFilter] = useState<NoteFilter>(null)
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null)
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('goal')
   const [period, setPeriod] = useState<string | null>(null)
+  // おすすめ一覧のキーワードと、選んでいる本（null は「すべての本から」）
+  const [suggestionQuery, setSuggestionQuery] = useState('')
+  const [suggestionSourceId, setSuggestionSourceId] = useState<number | null>(null)
 
   const [review, setReview] = useState<Review | null>(null)
   const [yearReview, setYearReview] = useState<Review | null>(null)
 
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [writingBookId, setWritingBookId] = useState<number | null>(null)
+  // 一覧ペインを畳んでいるか。詳細を広く読みたいときに使う
+  const [sidebarHidden, setSidebarHidden] = useState(false)
+  // 読了ダイアログから積読に足したとき、詳細の「次に読む本」を取り直すための目印
+  const [detailEpoch, setDetailEpoch] = useState(0)
 
   // 振り返りの期間
   useEffect(() => {
@@ -91,12 +103,15 @@ export function DesktopShell({ data }: { data: AppData }) {
       .catch(() => undefined)
   }, [view, books])
 
-  // ⌘K の開閉と Esc
+  // ⌘K の開閉と Esc、⌘B で一覧ペインの開閉
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setPaletteOpen((prev) => !prev)
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') {
+        event.preventDefault()
+        setSidebarHidden((prev) => !prev)
       } else if (event.key === 'Escape' && paletteOpen) {
         event.preventDefault()
         setPaletteOpen(false)
@@ -115,14 +130,19 @@ export function DesktopShell({ data }: { data: AppData }) {
    * （読了タブを見ているときに積読の本を足した、など）。
    * 関係のない絞り込みは触らないので、ユーザーが選んだ状態をむやみに壊さない。
    */
-  function unhideBook(book: { status: api.BookStatus; tags: string[] }) {
-    const next = filtersRevealing(book, { status: libraryFilter, tag: tagFilter })
+  function unhideBook(book: api.Book) {
+    const next = filtersRevealing(book, {
+      status: libraryFilter,
+      tag: tagFilter,
+      genre: genreFilter,
+    })
     setLibraryFilter(next.status)
     setTagFilter(next.tag)
+    setGenreFilter(next.genre)
   }
 
   /** 本棚でその本を開く。隠れていたら絞り込みを外してから選ぶ */
-  function revealBook(book: { id: number; status: api.BookStatus; tags: string[] }) {
+  function revealBook(book: api.Book) {
     unhideBook(book)
     setView('library')
     setAdding(false)
@@ -196,6 +216,27 @@ export function DesktopShell({ data }: { data: AppData }) {
   const writingBook =
     writingBookId !== null && bookDetail?.id === writingBookId ? bookDetail : null
 
+  const allSuggestions = useAllSuggestions(view === 'suggestions', {
+    onAdded: () => void reload(),
+    onError: setToast,
+  })
+  const suggestionGroups = useMemo(
+    () =>
+      groupBySource(
+        markShelved(allSuggestions.items, books).filter((item) =>
+          matchesKeyword(item, suggestionQuery),
+        ),
+      ),
+    [allSuggestions.items, books, suggestionQuery],
+  )
+  // 選んでいる本の候補がキーワードで全部消えたら、「すべての本から」を出す
+  const selectedSuggestionGroup = suggestionGroups.find(
+    (group) => group.book.id === suggestionSourceId,
+  )
+  const shownSuggestionGroups = selectedSuggestionGroup
+    ? [selectedSuggestionGroup]
+    : suggestionGroups
+
   function renderList() {
     if (view === 'library') {
       return (
@@ -203,10 +244,11 @@ export function DesktopShell({ data }: { data: AppData }) {
           books={books}
           filter={libraryFilter}
           tagFilter={tagFilter}
-          tags={tags}
+          genreFilter={genreFilter}
           selectedId={selectedBookId}
           onFilter={setLibraryFilter}
           onTagFilter={setTagFilter}
+          onGenreFilter={setGenreFilter}
           onSelect={(id) => {
             setAdding(false)
             setSelectedBookId(id)
@@ -230,6 +272,19 @@ export function DesktopShell({ data }: { data: AppData }) {
     if (view === 'review') {
       return (
         <ReviewPane periods={periods} selected={period} onSelect={setPeriod} />
+      )
+    }
+    if (view === 'suggestions') {
+      return (
+        <SuggestionsPane
+          groups={suggestionGroups}
+          total={suggestionGroups.reduce((sum, group) => sum + group.items.length, 0)}
+          query={suggestionQuery}
+          onQuery={setSuggestionQuery}
+          selectedId={selectedSuggestionGroup?.book.id ?? null}
+          onSelect={setSuggestionSourceId}
+          loading={allSuggestions.loading}
+        />
       )
     }
     return <SettingsPane selected={settingsSection} onSelect={setSettingsSection} />
@@ -268,6 +323,8 @@ export function DesktopShell({ data }: { data: AppData }) {
       }
       return (
         <BookDetailView
+          // ダイアログで積読に足したあと、詳細側の候補にも印を出すために組み直す
+          key={`${bookDetail.id}-${detailEpoch}`}
           book={bookDetail}
           notes={bookNotes}
           tagSuggestions={tags.map((tag) => tag.name)}
@@ -279,6 +336,13 @@ export function DesktopShell({ data }: { data: AppData }) {
           onDelete={() => removeBook(bookDetail)}
           onReload={() => void reload()}
           onError={setToast}
+          onNotify={setToast}
+          onFilterTag={(tag) => {
+            // タグを押したら、本棚をそのタグだけで絞り込む（デザイン 8b）
+            setTagFilter(tag)
+            setLibraryFilter(null)
+            setGenreFilter(null)
+          }}
         />
       )
     }
@@ -305,6 +369,18 @@ export function DesktopShell({ data }: { data: AppData }) {
         />
       )
     }
+    if (view === 'suggestions') {
+      return (
+        <SuggestionsView
+          groups={shownSuggestionGroups}
+          query={suggestionQuery}
+          loading={allSuggestions.loading}
+          onOpenBook={openBookById}
+          onAdd={(item) => void allSuggestions.add(item)}
+          onDismiss={(item) => void allSuggestions.dismiss(item)}
+        />
+      )
+    }
     if (!settings) return <p className="detail-empty">読み込み中…</p>
     return (
       <SettingsView
@@ -324,9 +400,12 @@ export function DesktopShell({ data }: { data: AppData }) {
         view={view}
         onChange={setView}
         onOpenPalette={() => setPaletteOpen(true)}
+        sidebarHidden={sidebarHidden}
+        onToggleSidebar={() => setSidebarHidden((prev) => !prev)}
       />
-      {/* レール以外（一覧＋詳細）をひとかたまりにして画面の中央に寄せる */}
-      <div className="panes">
+      {/* レール以外（一覧＋詳細）をひとかたまりにして画面の中央に寄せる。
+          隠すときは表示だけ消す（要素は残すので、絞り込みや位置は元のまま戻る） */}
+      <div className={`panes${sidebarHidden ? ' panes-solo' : ''}`}>
         <aside className="list-pane">{renderList()}</aside>
         <main className="detail-pane">{renderDetail()}</main>
       </div>
@@ -370,6 +449,8 @@ export function DesktopShell({ data }: { data: AppData }) {
             void reload()
             setLibraryFilter(null)
             setTagFilter(null)
+            setGenreFilter(null)
+            setDetailEpoch((prev) => prev + 1)
           }}
           onWriteReport={() => {
             setWritingBookId(justFinished)

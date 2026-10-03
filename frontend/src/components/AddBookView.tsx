@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import type { BookCreate, BookInfo, BookStatus } from '../api'
+import type { BookCreate, BookInfo, BookStatus, Genre } from '../api'
 import { ApiError, lookupIsbn, searchCatalog, STATUS_LABELS } from '../api'
 import { Cover } from './Cover'
+import { GenrePicker } from './GenreChips'
 import { Segmented } from './Segmented'
 import { TagEditor } from './TagEditor'
 
@@ -20,6 +21,8 @@ const EMPTY = {
   total: '',
   cover_url: null as string | null,
   category: null as string | null,
+  // デザイン 8b: 決めていない本は「その他」
+  genre: 'other' as Genre,
   status: 'unread' as BookStatus,
   tags: [] as string[],
 }
@@ -91,6 +94,7 @@ export function AddBookView({ tagSuggestions, onCreate, onCancel }: Props) {
         author: form.author.trim() || null,
         publisher: form.publisher.trim() || null,
         category: form.category,
+        genre: form.genre,
         cover_url: form.cover_url,
         total: form.total ? Number(form.total) : null,
         status: form.status,
@@ -294,6 +298,8 @@ export function AddBookView({ tagSuggestions, onCreate, onCancel }: Props) {
             onChange={(status) => setForm({ ...form, status })}
           />
         </div>
+
+        <GenrePicker value={form.genre} onChange={(genre) => setForm({ ...form, genre })} />
 
         <div className="stack" style={{ gap: 5 }}>
           <span style={{ fontSize: 12, color: 'var(--color-neutral-700)' }}>タグ</span>

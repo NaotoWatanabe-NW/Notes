@@ -8,9 +8,9 @@ import {
   DISTANCE_LABELS,
   getSuggestions,
 } from '../api'
-import { Cover } from './Cover'
 import { Segmented } from './Segmented'
 import { Stars } from './Stars'
+import { SuggestionCard } from './SuggestionCard'
 
 type Props = {
   bookId: number
@@ -190,59 +190,14 @@ export function NextBookDialog({
           </p>
         ) : (
           <div className="next-cards">
-            {visible.map((suggestion) => {
-              const isAdded = suggestion.added_book_id !== null
-              return (
-                <article key={suggestion.id} className="next-card">
-                  <Cover
-                    title={suggestion.title}
-                    author={suggestion.author}
-                    src={suggestion.cover_url}
-                    size="md"
-                  />
-                  <span className="next-card-title">{suggestion.title}</span>
-                  <span className="next-card-author">
-                    {suggestion.author ?? '著者不明'}
-                  </span>
-                  <span className="next-card-reason">{suggestion.reason}</span>
-                  <span
-                    className={`next-card-basis ${
-                      suggestion.basis === 'note' ? 'kind-quote' : 'writing-kicker'
-                    }`}
-                  >
-                    {BASIS_LABELS[suggestion.basis]} ·{' '}
-                    {DISTANCE_LABELS[suggestion.distance]}
-                  </span>
-
-                  <div className="next-card-actions">
-                    {isAdded ? (
-                      <>
-                        <span className="tag tag-accent">✓ 積読に追加しました</span>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{ fontSize: 12 }}
-                          onClick={() => add(suggestion)}
-                        >
-                          積読に追加
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          style={{ fontSize: 12, color: 'var(--color-neutral-700)' }}
-                          onClick={() => dismiss(suggestion)}
-                        >
-                          興味なし
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </article>
-              )
-            })}
+            {visible.map((suggestion) => (
+              <SuggestionCard
+                key={suggestion.id}
+                suggestion={suggestion}
+                onAdd={() => void add(suggestion)}
+                onDismiss={() => void dismiss(suggestion)}
+              />
+            ))}
           </div>
         )}
 

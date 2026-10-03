@@ -1,11 +1,12 @@
 """APIでやり取りするデータの形（入力チェックもここで行う）"""
+import unicodedata
 from datetime import date, datetime
 from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from . import isbn as isbn_util
-from .models import Basis, BookSort, BookStatus, Distance, NoteKind, QuoteStyle, Recommend
+from .models import Basis, BookSort, BookStatus, Distance, Genre, NoteKind, QuoteStyle, Recommend
 
 # タグ名は前後の空白を落として扱う。空白だけのタグは作らせない
 TagName = Annotated[str, Field(min_length=1, max_length=40)]
@@ -35,6 +36,8 @@ class BookBase(BaseModel):
     author: str | None = Field(default=None, max_length=255)
     publisher: str | None = Field(default=None, max_length=255)
     category: str | None = Field(default=None, max_length=120)
+    # カテゴリ（小説 / ビジネス・実用 / …）。指定しなければ「その他」（デザイン 8b）
+    genre: Genre = Genre.OTHER
     cover_url: str | None = Field(default=None, max_length=500)
     status: BookStatus = BookStatus.UNREAD
     rating: int | None = Field(default=None, ge=1, le=5)
@@ -62,6 +65,7 @@ class BookUpdate(BaseModel):
     author: str | None = Field(default=None, max_length=255)
     publisher: str | None = Field(default=None, max_length=255)
     category: str | None = Field(default=None, max_length=120)
+    genre: Genre | None = None
     cover_url: str | None = Field(default=None, max_length=500)
     status: BookStatus | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
@@ -88,6 +92,11 @@ class BookUpdate(BaseModel):
     def _page_not_null(cls, value):
         return _reject_explicit_null(value, "読んだページ")
 
+    @field_validator("genre")
+    @classmethod
+    def _genre_not_null(cls, value):
+        return _reject_explicit_null(value, "カテゴリ")
+
 
 class Reading(BaseModel):
     """1回ぶんの「読み終えた」記録"""
@@ -112,6 +121,12 @@ class BookRead(BookBase):
     has_report: bool = False
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("genre", mode="before")
+    @classmethod
+    def _genre_default(cls, value):
+        """列を足す前からあった行は null のまま。画面では「その他」として扱う"""
+        return Genre.OTHER if value is None else value
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -289,6 +304,20 @@ class Suggestion(SuggestionBase):
     added_book_id: int | None = None
 
 
+class SuggestionSource(BaseModel):
+    """おすすめ一覧に添える、どの本の候補か（その本を読み終えたときに出す）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    author: str | None = None
+
+
+class SuggestionWithBook(Suggestion):
+    """おすすめ一覧の1件。候補に、紐付いている本を添える"""
+    book: SuggestionSource
+
+
 class SuggestionSet(BaseModel):
     """おすすめ画面に渡すひとまとまり"""
     book_id: int
@@ -303,3 +332,74 @@ class SuggestionSet(BaseModel):
     summary: str
     # まだ次のページがあるか（「出し直す」で次の3冊を出せるか）
     has_more: bool = False
+
+
+# ---------------------------------------------------------------- キーワードのおすすめ
+
+def _normalize_keyword(value):
+    """全角/半角をそろえ、前後と連続する空白を詰める。
+
+    「 ゲーム理論 」と「ゲーム理論」、「ＡＩ」と「AI」を同じキーワードにするため。
+    """
+    if not isinstance(value, str):
+        return value
+    return " ".join(unicodedata.normalize("NFKC", value).split())
+
+
+Keyword = Annotated[
+    str, BeforeValidator(_normalize_keyword), Field(min_length=1, max_length=80)
+]
+
+
+class TopicSuggestionBase(BaseModel):
+    """キーワードのおすすめ1冊ぶん"""
+    title: str = Field(min_length=1, max_length=255)
+    author: str | None = Field(default=None, max_length=255)
+    isbn: Isbn = None
+    cover_url: str | None = Field(default=None, max_length=500)
+    # 手がかりにした本からの距離（同じテーマ・近いテーマ＝近い / 少し離れた）
+    distance: Distance
+    # 理由は一言で
+    reason: str = Field(min_length=1, max_length=200)
+    # 手がかりにした本棚の本。無ければ null
+    from_book_id: int | None = None
+
+
+class TopicSuggestionWrite(TopicSuggestionBase):
+    """設定するときに受け取る形"""
+    model_config = ConfigDict(extra="forbid")
+
+
+class TopicSuggestion(TopicSuggestionBase):
+    """返すときの形"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    # 積読に追加済みなら、その本の id
+    added_book_id: int | None = None
+
+
+class TopicWrite(BaseModel):
+    """キーワードのおすすめをまとめて入れ替えるときに受け取る形"""
+    model_config = ConfigDict(extra="forbid")
+
+    keyword: Keyword
+    # 消すときは DELETE /api/topics/{id} を使う。空の配列で「消えたキーワード」を残さない
+    suggestions: list[TopicSuggestionWrite] = Field(min_length=1, max_length=20)
+
+
+class TopicSummary(BaseModel):
+    """キーワードの一覧の1行"""
+    id: int
+    keyword: str
+    # 出せる候補の数（興味なしにした本は数えない）
+    count: int
+    updated_at: datetime
+
+
+class TopicDetail(BaseModel):
+    """キーワード1つぶんのおすすめ"""
+    id: int
+    keyword: str
+    updated_at: datetime
+    suggestions: list[TopicSuggestion]

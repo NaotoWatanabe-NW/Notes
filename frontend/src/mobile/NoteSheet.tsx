@@ -4,8 +4,6 @@ import { Segmented } from '../components/Segmented'
 import { Sheet } from './Sheet'
 
 type Props = {
-  /** 記録するときの既定のページ（いま読んでいるところ） */
-  page: number
   onSave: (payload: NoteCreate) => Promise<void>
   onClose: () => void
 }
@@ -13,10 +11,14 @@ type Props = {
 /**
  * メモを書くモーダルシート（デザイン 1d）。
  * 旧案にあった「感想」タブは廃止。感想はレポートに書く。
+ *
+ * 「メモを書く」から開くので **メモで始める**（PC版の記録パネルと同じ理由）。
  */
-export function NoteSheet({ page, onSave, onClose }: Props) {
-  const [kind, setKind] = useState<NoteKind>('quote')
-  const [pageText, setPageText] = useState(page ? String(page) : '')
+export function NoteSheet({ onSave, onClose }: Props) {
+  const [kind, setKind] = useState<NoteKind>('memo')
+  // ページは空で開く。電子書籍だと表示設定でページが変わるので、
+  // 進捗のページを既定で入れると当てにならない数字が残る
+  const [pageText, setPageText] = useState('')
   const [text, setText] = useState('')
   const [memo, setMemo] = useState('')
   const [saving, setSaving] = useState(false)
@@ -53,7 +55,7 @@ export function NoteSheet({ page, onSave, onClose }: Props) {
           className="input input-page"
           type="number"
           min={1}
-          placeholder="ページ"
+          placeholder="ページ（任意）"
           value={pageText}
           onChange={(e) => setPageText(e.target.value)}
         />
@@ -81,6 +83,13 @@ export function NoteSheet({ page, onSave, onClose }: Props) {
           />
         ) : null}
       </div>
+
+      {/* 「自分のメモ」だけ書いて保存できないときに、理由が分かるようにする */}
+      {!text.trim() && memo.trim() ? (
+        <p className="muted" style={{ fontSize: 12, margin: '0 16px' }}>
+          引用の本文を入れると保存できます。メモだけ残すなら「メモ」に切り替えてください
+        </p>
+      ) : null}
 
       <div className="m-sheet-actions">
         <button

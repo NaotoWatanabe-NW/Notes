@@ -1,7 +1,7 @@
 import type { BookStatus } from './api'
 
 /** 左のレールで切り替える画面 */
-export type View = 'library' | 'notes' | 'review' | 'settings'
+export type View = 'library' | 'notes' | 'review' | 'suggestions' | 'settings'
 
 /** 本棚の絞り込み。null は「すべて」 */
 export type LibraryFilter = BookStatus | null

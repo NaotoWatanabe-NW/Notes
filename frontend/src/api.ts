@@ -8,11 +8,23 @@ export type Recommend = 'strong' | 'some' | 'self'
 export type NoteKind = 'quote' | 'memo'
 export type BookSort = 'recent' | 'title' | 'progress'
 export type QuoteStyle = 'italic' | 'plain'
+/** 本のカテゴリ。細かい分野はタグで持つ（`category` は国会図書館の件名で別物） */
+export type Genre = 'novel' | 'business' | 'essay' | 'academic' | 'magazine' | 'other'
 
 export const STATUS_LABELS: Record<BookStatus, string> = {
   reading: '読書中',
   finished: '読了',
   unread: '積読',
+}
+
+/** 並びは画面に出す順 */
+export const GENRE_LABELS: Record<Genre, string> = {
+  novel: '小説',
+  business: 'ビジネス・実用',
+  essay: 'エッセイ',
+  academic: '学術',
+  magazine: '雑誌',
+  other: 'その他',
 }
 
 export const KIND_LABELS: Record<NoteKind, string> = {
@@ -41,6 +53,8 @@ export type Book = {
   author: string | null
   publisher: string | null
   category: string | null
+  /** カテゴリ。決めていない本は「その他」 */
+  genre: Genre
   cover_url: string | null
   status: BookStatus
   rating: number | null
@@ -71,6 +85,7 @@ export type BookCreate = {
   author?: string | null
   publisher?: string | null
   category?: string | null
+  genre?: Genre
   cover_url?: string | null
   status?: BookStatus
   total?: number | null
@@ -366,13 +381,16 @@ export type SuggestionSet = {
 
 export function getSuggestions(
   bookId: number,
-  params: { basis: Basis[]; distance: Distance; page: number },
+  params: { basis: Basis[]; distance: Distance; page: number; perPage?: number },
 ) {
   const query = new URLSearchParams({
     basis: params.basis.join(','),
     distance: params.distance,
     page: String(params.page),
   })
+  // 1ページの冊数。読了ダイアログは既定（3冊）のまま、
+  // 本の詳細画面は設定してある候補を全部出したいので指定する
+  if (params.perPage !== undefined) query.set('per_page', String(params.perPage))
   return request<SuggestionSet>(`/api/books/${bookId}/suggestions?${query}`)
 }
 
@@ -386,6 +404,14 @@ export const setSuggestions = (bookId: number, items: SuggestionWrite[]) =>
 /** 候補を積読として本棚に追加する */
 export const addSuggestionToShelf = (suggestionId: number) =>
   request<BookDetail>(`/api/suggestions/${suggestionId}/add`, { method: 'POST' })
+
+/** おすすめ一覧で候補に添える「どの本の候補か」（その本を読み終えたときに出す） */
+export type SuggestionSource = { id: number; title: string; author: string | null }
+
+export type SuggestionWithBook = Suggestion & { book: SuggestionSource }
+
+/** 設定してある「次に読む本」を全部、どの本の候補かを添えて取る（おすすめ一覧） */
+export const listAllSuggestions = () => request<SuggestionWithBook[]>('/api/suggestions')
 
 /** 「興味なし」。以後のおすすめから外す */
 export const dismissSuggestion = (isbn: string) =>

@@ -8,6 +8,25 @@
 #   ./run.sh test     テストと型チェック
 #   ./run.sh setup    依存をインストール（初回や、依存を足したとき）
 #
+# 【常駐運用】母艦では systemd ユーザーサービス notes-web として常駐しており、
+# serve と同じ構成（127.0.0.1:8765 + tailscale serve の 8765→8765）が常時上がっている。
+# 詳細と操作は docs/systemd-service.md。
+#
+#   systemctl --user status notes-web     状態確認
+#   systemctl --user restart notes-web    コード更新の反映（フロントのビルドも走る）
+#   journalctl --user -u notes-web -f     ログ
+#
+# 常駐中にこのスクリプトを使うときは、先に止めること:
+#
+#   systemctl --user stop notes-web
+#
+# 止めずに実行すると下の check_port が 8765 の使用者を表示して中止する（安全側）。
+# それより重大なのは **serve を使ったとき**で、serve は終了時に ts_teardown が
+# `tailscale serve --https=8765 off` を実行するため、常駐用に作ってある
+# tailnet の出口まで消える。消したら次で戻す:
+#
+#   tailscale serve --bg --yes --https=8765 http://127.0.0.1:8765
+#
 # ポートを変えたいとき:
 #   API_PORT=8010 ./run.sh
 #
@@ -302,6 +321,11 @@ ${BOLD}読書ノートアプリ${OFF}
 
 例:
   API_PORT=8010 ./run.sh        既定のポートが埋まっているとき
+
+${BOLD}常駐運用${OFF}（母艦）:
+  systemd ユーザーサービス ${BOLD}notes-web${OFF} が serve と同じ構成で常時動いています。
+  このスクリプトを使うときは先に ${BOLD}systemctl --user stop notes-web${OFF} を。
+  詳細は docs/systemd-service.md（serve は終了時に tailscale の出口を消す点に注意）。
 EOF
 }
 

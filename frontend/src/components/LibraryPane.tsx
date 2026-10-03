@@ -1,17 +1,21 @@
-import type { Book, TagCount } from '../api'
+import type { Book, Genre } from '../api'
 import { STATUS_LABELS } from '../api'
 import type { LibraryFilter } from '../types'
+import { isVisible, topTags } from '../visibility'
 import { Cover } from './Cover'
+import { GenreFilterChips, GenreTag } from './GenreChips'
+import { HashText, TagFilterRow } from './HashTags'
 import { Segmented } from './Segmented'
 
 type Props = {
   books: Book[]
   filter: LibraryFilter
   tagFilter: string | null
-  tags: TagCount[]
+  genreFilter: Genre | null
   selectedId: number | null
   onFilter: (next: LibraryFilter) => void
   onTagFilter: (next: string | null) => void
+  onGenreFilter: (next: Genre | null) => void
   onSelect: (id: number) => void
   onOpenPalette: () => void
   onAdd: () => void
@@ -39,10 +43,11 @@ export function LibraryPane({
   books,
   filter,
   tagFilter,
-  tags,
+  genreFilter,
   selectedId,
   onFilter,
   onTagFilter,
+  onGenreFilter,
   onSelect,
   onOpenPalette,
   onAdd,
@@ -57,10 +62,8 @@ export function LibraryPane({
     { value: 'all' as const, label: 'すべて' },
   ]
 
-  const visible = books.filter(
-    (book) =>
-      (filter === null || book.status === filter) &&
-      (tagFilter === null || book.tags.includes(tagFilter)),
+  const visible = books.filter((book) =>
+    isVisible(book, { status: filter, tag: tagFilter, genre: genreFilter }),
   )
 
   return (
@@ -84,29 +87,19 @@ export function LibraryPane({
         onChange={(next) => onFilter(next === 'all' ? null : next)}
       />
 
-      {tags.length > 0 ? (
-        <div className="tags">
-          {tags.map((tag) => (
-            <button
-              key={tag.name}
-              type="button"
-              className="tag-chip"
-              aria-pressed={tagFilter === tag.name}
-              onClick={() => onTagFilter(tagFilter === tag.name ? null : tag.name)}
-            >
-              {tag.name} {tag.count}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {/* 状態 → カテゴリ → タグ の順（デザイン 8b）。条件はすべて同時に効く */}
+      <GenreFilterChips value={genreFilter} onChange={onGenreFilter} />
+      <TagFilterRow tags={topTags(books, tagFilter)} value={tagFilter} onChange={onTagFilter} />
 
       {visible.length === 0 ? (
         <p className="list-aside" style={{ padding: '0 8px' }}>
           {books.length === 0
             ? 'まだ本がありません。「＋ 追加」から登録できます。'
-            : tagFilter
-              ? `「${tagFilter}」の本はありません。`
-              : `${filter ? STATUS_LABELS[filter] : ''}の本はありません。`}
+            : genreFilter
+              ? 'このカテゴリの本はありません。'
+              : tagFilter
+                ? `#${tagFilter} の本はありません。`
+                : `${filter ? STATUS_LABELS[filter] : ''}の本はありません。`}
         </p>
       ) : (
         <div className="rows">
@@ -122,6 +115,10 @@ export function LibraryPane({
               <span className="row-main">
                 <span className="row-title">{book.title}</span>
                 <span className="row-meta">{meta(book)}</span>
+                <span className="row-cats">
+                  <GenreTag genre={book.genre} />
+                  <HashText tags={book.tags} />
+                </span>
               </span>
             </button>
           ))}

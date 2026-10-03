@@ -3,7 +3,7 @@
  * ブラウザ側でファイルを組み立てて保存させるので、サーバーは関わらない。
  */
 import type { Book, NoteWithBook } from './api'
-import { KIND_LABELS, STATUS_LABELS } from './api'
+import { GENRE_LABELS, KIND_LABELS, STATUS_LABELS } from './api'
 
 function download(filename: string, text: string, mime: string) {
   const url = URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` }))
@@ -58,6 +58,7 @@ export function exportCsv(books: Book[]) {
     'author',
     'publisher',
     'isbn',
+    'genre',
     'status',
     'rating',
     'page',
@@ -75,6 +76,7 @@ export function exportCsv(books: Book[]) {
       book.author,
       book.publisher,
       book.isbn,
+      GENRE_LABELS[book.genre],
       STATUS_LABELS[book.status],
       book.rating,
       book.page,

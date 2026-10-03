@@ -424,3 +424,54 @@ def test_本を削除すると読了の記録も消える(client, db_engine):
     client.delete(f"/api/books/{book['id']}")
     with db_engine.connect() as conn:
         assert conn.execute(text("select count(*) from readings")).scalar() == 0
+
+
+# --- カテゴリ ---
+
+def test_カテゴリを付けて登録できる(client):
+    book = _create(client, genre="novel")
+    assert book["genre"] == "novel"
+    assert client.get(f"/api/books/{book['id']}").json()["genre"] == "novel"
+
+
+def test_カテゴリを指定しなければその他になる(client):
+    assert _create(client)["genre"] == "other"
+
+
+def test_カテゴリを変えられる(client):
+    book = _create(client, genre="novel")
+    response = client.patch(f"/api/books/{book['id']}", json={"genre": "academic"})
+    assert response.status_code == 200
+    assert response.json()["genre"] == "academic"
+
+
+def test_カテゴリはnullで空にできない(client):
+    # 画面は6つのどれかを選ぶだけで、未分類は作らない（デザイン 8b）
+    book = _create(client, genre="essay")
+    response = client.patch(f"/api/books/{book['id']}", json={"genre": None})
+    assert response.status_code == 422
+    assert client.get(f"/api/books/{book['id']}").json()["genre"] == "essay"
+
+
+def test_カテゴリが入っていない古い本はその他として返る(client, db_engine):
+    book = _create(client)
+    with db_engine.begin() as conn:
+        conn.execute(text("UPDATE books SET genre = NULL WHERE id = :id"), {"id": book["id"]})
+    assert client.get(f"/api/books/{book['id']}").json()["genre"] == "other"
+    assert client.get("/api/books").json()[0]["genre"] == "other"
+
+
+def test_ほかの項目を更新してもカテゴリは変わらない(client):
+    # PATCH は送らなかった項目を変えない
+    book = _create(client, genre="business")
+    client.patch(f"/api/books/{book['id']}", json={"rating": 4})
+    assert client.get(f"/api/books/{book['id']}").json()["genre"] == "business"
+
+
+def test_知らないカテゴリは422になる(client):
+    assert client.post("/api/books", json={"title": "A", "genre": "comic"}).status_code == 422
+
+
+def test_一覧にもカテゴリが入る(client):
+    _create(client, title="A", genre="magazine")
+    assert client.get("/api/books").json()[0]["genre"] == "magazine"

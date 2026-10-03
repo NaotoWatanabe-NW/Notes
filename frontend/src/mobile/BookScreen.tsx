@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import type { BookDetail, BookUpdate, Note, NoteCreate } from '../api'
-import { KIND_LABELS, STATUS_LABELS } from '../api'
+import { GENRE_LABELS, KIND_LABELS, STATUS_LABELS } from '../api'
 import { CoverPicker } from '../components/CoverPicker'
+import { GenrePicker } from '../components/GenreChips'
+import { TagLine } from '../components/HashTags'
 import { Stars } from '../components/Stars'
 import { countCharacters } from '../markdownInsert'
+import { PERCENT_TOTAL, pageFromPercent } from '../progress'
+import { BookSuggestions } from './BookSuggestions'
 import { NoteSheet } from './NoteSheet'
 import { Sheet } from './Sheet'
 
@@ -18,6 +22,9 @@ type Props = {
   onDelete: () => void
   onReload: () => void
   onError: (message: string) => void
+  onNotify: (message: string) => void
+  /** タグを押したとき。そのタグで絞り込んだ本棚を開く */
+  onFilterTag: (tag: string) => void
 }
 
 const STATUS_TAG: Record<BookDetail['status'], string> = {
@@ -44,14 +51,26 @@ export function BookScreen({
   onDelete,
   onReload,
   onError,
+  onNotify,
+  onFilterTag,
 }: Props) {
-  const [sheet, setSheet] = useState<'none' | 'note' | 'more' | 'progress'>('none')
-  const [pageDraft, setPageDraft] = useState(String(book.page || ''))
+  const [sheet, setSheet] = useState<'none' | 'note' | 'more' | 'progress' | 'genre'>(
+    'none',
+  )
+  // 進捗は％で入れてもらう（電子書籍はページが可変なので）
+  const [percentDraft, setPercentDraft] = useState(String(book.progress ?? 0))
 
   function saveProgress() {
-    const next = Number(pageDraft)
-    if (!Number.isFinite(next) || next < 0) return
-    onUpdate({ page: next, status: book.status === 'unread' ? 'reading' : undefined })
+    const percent = Number(percentDraft)
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) return
+    // 総ページが分からない本（電子書籍など）は 100 を分母にして、％をそのまま持つ
+    const total = book.total ?? PERCENT_TOTAL
+    // 保存はページで持つ。100％まで読んだらサーバー側が状態を「読了」に変える
+    onUpdate({
+      ...(book.total ? {} : { total: PERCENT_TOTAL }),
+      page: pageFromPercent(percent, total),
+      status: book.status === 'unread' ? 'reading' : undefined,
+    })
     setSheet('none')
   }
 
@@ -89,6 +108,16 @@ export function BookScreen({
             <span className={`tag ${STATUS_TAG[book.status]}`}>
               {STATUS_LABELS[book.status]}
             </span>
+            <button
+              type="button"
+              className="tag tag-neutral cat-tag-button"
+              style={{ marginLeft: 6 }}
+              title="カテゴリを変更"
+              onClick={() => setSheet('genre')}
+            >
+              {GENRE_LABELS[book.genre]}
+              <i className="ph-duotone ph-caret-down" />
+            </button>
             {book.read_count > 1 ? (
               <span className="tag tag-neutral" style={{ marginLeft: 6 }}>
                 {book.read_count}回読了
@@ -99,6 +128,11 @@ export function BookScreen({
           <p className="m-book-byline">
             {[book.author, book.publisher].filter(Boolean).join(' · ') || '著者不明'}
           </p>
+          <TagLine
+            tags={book.tags}
+            onChange={(tags) => onUpdate({ tags })}
+            onSelect={onFilterTag}
+          />
           {book.status === 'finished' ? (
             <Stars value={book.rating} onChange={(rating) => onUpdate({ rating })} />
           ) : null}
@@ -108,12 +142,9 @@ export function BookScreen({
       {book.status === 'reading' && book.total ? (
         <section className="stack" style={{ marginBottom: 18 }}>
           <div className="progress-line" style={{ maxWidth: 'none' }}>
+            <span>{book.progress}%</span>
             <span>
-              p.{book.page} / {book.total}
-            </span>
-            <span>
-              {book.started_on ? `${shortDate(book.started_on)}から · ` : ''}
-              {book.progress}%
+              {book.started_on ? `${shortDate(book.started_on)}から` : ''}
             </span>
           </div>
           <div className="progress-bar" style={{ maxWidth: 'none' }}>
@@ -135,7 +166,7 @@ export function BookScreen({
           type="button"
           className="btn btn-secondary"
           onClick={() => {
-            setPageDraft(String(book.page || ''))
+            setPercentDraft(String(book.progress ?? 0))
             setSheet('progress')
           }}
         >
@@ -162,11 +193,18 @@ export function BookScreen({
         </span>
       </button>
 
-      <div className="section-head" style={{ marginBottom: 12 }}>
+      {/* 次に読む本（設定してある候補があるときだけ中身が出る） */}
+      <BookSuggestions bookId={book.id} onAdded={onReload} onError={onError} />
+
+      <div className="section-head" style={{ margin: '26px 0 12px' }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
           メモ・引用 {notes.length}件
         </h2>
-        {notes.length > 0 ? <span className="section-aside">ページ順</span> : null}
+        {notes.length > 0 ? (
+          <span className="section-aside">
+            {notes.some((note) => note.page) ? 'ページ順' : '新しい順'}
+          </span>
+        ) : null}
       </div>
 
       {notes.length === 0 ? (
@@ -211,11 +249,27 @@ export function BookScreen({
       )}
 
       {sheet === 'note' ? (
-        <NoteSheet
-          page={book.page}
-          onSave={onAddNote}
-          onClose={() => setSheet('none')}
-        />
+        <NoteSheet onSave={onAddNote} onClose={() => setSheet('none')} />
+      ) : null}
+
+      {sheet === 'genre' ? (
+        <Sheet size="half" onClose={() => setSheet('none')}>
+          <div className="m-sheet-head">
+            <span style={{ fontWeight: 600 }}>カテゴリ</span>
+          </div>
+          <div className="m-sheet-body">
+            <GenrePicker
+              value={book.genre}
+              label={false}
+              onChange={(genre) => {
+                setSheet('none')
+                if (genre === book.genre) return
+                onUpdate({ genre })
+                onNotify(`カテゴリを「${GENRE_LABELS[genre]}」にしました`)
+              }}
+            />
+          </div>
+        </Sheet>
       ) : null}
 
       {sheet === 'progress' ? (
@@ -225,17 +279,18 @@ export function BookScreen({
           </div>
           <div className="m-sheet-body">
             <div className="panel-row">
-              <label htmlFor="m-page">読んだページ</label>
+              <label htmlFor="m-percent">読んだところ</label>
               <input
-                id="m-page"
+                id="m-percent"
                 className="input input-narrow"
                 type="number"
                 min={0}
-                value={pageDraft}
-                onChange={(e) => setPageDraft(e.target.value)}
+                max={100}
+                value={percentDraft}
+                onChange={(e) => setPercentDraft(e.target.value)}
                 autoFocus
               />
-              {book.total ? <span className="muted">/ {book.total}</span> : null}
+              <span className="muted">%</span>
             </div>
           </div>
           <div className="m-sheet-actions">

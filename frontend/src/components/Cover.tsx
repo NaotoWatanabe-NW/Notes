@@ -20,6 +20,9 @@ export function Cover({ title, author, src, size = 'sm' }: Props) {
       <img
         src={src}
         alt=""
+        // 画面に入るまで読まない。おすすめ一覧のように数百冊並ぶと、
+        // 書影の中継（国会図書館）にまとめて問い合わせてしまうため
+        loading="lazy"
         onError={() => setFailed(true)}
         className={sizeClass}
       />

@@ -34,6 +34,19 @@ class BookStatus(str, enum.Enum):
     FINISHED = "finished"  # 読了
 
 
+class Genre(str, enum.Enum):
+    """本のカテゴリ（本棚の絞り込み用の大きな分類）。
+
+    細かい分野はタグで持つ。`Book.category`（国会図書館の件名）とは別物。
+    """
+    NOVEL = "novel"        # 小説
+    BUSINESS = "business"  # ビジネス・実用
+    ESSAY = "essay"        # エッセイ
+    ACADEMIC = "academic"  # 学術
+    MAGAZINE = "magazine"  # 雑誌
+    OTHER = "other"        # その他
+
+
 class Recommend(str, enum.Enum):
     """読み終えた本を人にすすめたいか（デザインの「おすすめ度」）"""
     STRONG = "strong"  # 人にすすめたい
@@ -90,6 +103,10 @@ class Book(Base):
     publisher: Mapped[str | None] = mapped_column(String(255))
     # 「よく読む分野」の集計に使う。ISBN検索のときに国会図書館の件名から入れる
     category: Mapped[str | None] = mapped_column(String(120))
+    # カテゴリ。列は後から足したので null を許すが、入れるときは必ず値を入れる（既定はその他）
+    genre: Mapped[Genre | None] = mapped_column(
+        _values_enum(Genre, "genre"), default=Genre.OTHER
+    )
     cover_url: Mapped[str | None] = mapped_column(String(500))
 
     status: Mapped[BookStatus] = mapped_column(
@@ -261,6 +278,53 @@ class DismissedBook(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     isbn: Mapped[str] = mapped_column(String(13))
+    created_at: Mapped[datetime] = mapped_column(default=now_jst)
+
+
+class Topic(Base):
+    """キーワードごとのおすすめのまとまり（「ゲーム理論」「統計」など）。
+
+    「次に読む本」（Suggestion）が本棚の1冊に紐づくのに対し、こちらは
+    **キーワードに紐づく**。本棚の本は選書の手がかりにするだけ。
+    """
+    __tablename__ = "topics"
+    __table_args__ = (UniqueConstraint("keyword", name="uq_topic_keyword"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    keyword: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(default=now_jst)
+    updated_at: Mapped[datetime] = mapped_column(default=now_jst, onupdate=now_jst)
+
+    suggestions: Mapped[list["TopicSuggestion"]] = relationship(
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="TopicSuggestion.position, TopicSuggestion.id",
+    )
+
+
+class TopicSuggestion(Base):
+    """キーワードのおすすめ1冊。中身は Suggestion とほぼ同じ"""
+    __tablename__ = "topic_suggestions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("topics.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(255))
+    author: Mapped[str | None] = mapped_column(String(255))
+    isbn: Mapped[str | None] = mapped_column(String(13))
+    cover_url: Mapped[str | None] = mapped_column(String(500))
+    distance: Mapped[Distance] = mapped_column(_values_enum(Distance, "distance"))
+    reason: Mapped[str] = mapped_column(Text)
+    # 手がかりにした本棚の本（「『〇〇』より一段深く」の〇〇）。無ければ null
+    from_book_id: Mapped[int | None] = mapped_column(
+        ForeignKey("books.id", ondelete="SET NULL")
+    )
+    position: Mapped[int] = mapped_column(default=0)
+    # 積読に追加したら、その本の id を控える
+    added_book_id: Mapped[int | None] = mapped_column(
+        ForeignKey("books.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(default=now_jst)
 
 

@@ -73,21 +73,35 @@ _PUNCT = re.compile(
     r"[\s・:：;；,，、。.．!！?？「」『』\[\]［］【】〈〉<>《》\"'“”‘’"
     r"\-‐‑–—―─~〜～=＝/／+＋&＆#＃]"
 )
-# 「（講談社現代新書）」のような括弧書きは書名の一部ではないので落とす
-_PAREN = re.compile(r"[（(][^（()）]*[)）]")
+# 「（講談社現代新書）」「[第三版]」「〔完全版〕」のような括弧書きは書名の一部ではないので落とす
+_PAREN = re.compile(r"[（(][^（()）]*[)）]|[\[［][^\[\]［］]*[\]］]|〔[^〔〕]*〕")
 # 副題の区切り。ここより前を本題とみなす。
 # 空白1つは区切りにしない（「物語 ウィーンの歴史」と「物語 イギリスの歴史」が同じ本になる）
-_SUBTITLE = re.compile(r"\s[:：―—\-–〜~]\s?|[:：―—〜]|――|\s\s")
+# 「=」は並列書名（「アースダイバー = Earth Diver」）の区切り
+_SUBTITLE = re.compile(r"\s[:：―—\-–〜~=＝]\s?|[:：―—〜]|――|\s\s")
 # 版・巻の表記。「仏教 第2版」「銃・病原菌・鉄 上巻」も同じ本として扱う
 # （上下巻の本は上巻を候補にする約束なので、巻の違いは照合で問わない）
-_EDITION_HEAD = re.compile(r"^(新版|増補改訂版|増補版|改訂版|新装版|決定版|完全版|\[増補版\])")
-_EDITION_TAIL = re.compile(r"(第?\d+版|新版|増補改訂版|増補版|改訂版|新装版|完全版|[上中下]巻?|第?\d+巻)$")
+_EDITION_HEAD = re.compile(r"^(新版|増補改訂版|増補改訂|増補版|改訂版|新装版|決定版|完全版)")
+_EDITION_TAIL = re.compile(
+    r"(第?[\d一二三四五六七八九十]+版|新版|増補改訂版|増補版|改訂版|新装版|完全版|[上中下]巻?|第?\d+巻)$"
+)
+
+
+# 異体字。書誌とエージェントで書き方が割れる（柳澤/柳沢、下條/下条、日髙/日高）
+_ITAIJI = str.maketrans({
+    "澤": "沢", "條": "条", "髙": "高", "邊": "辺", "邉": "辺", "齋": "斉", "齊": "斉",
+    "﨑": "崎", "嵜": "崎", "濱": "浜", "廣": "広", "國": "国", "櫻": "桜", "藝": "芸",
+    "瀧": "滝", "德": "徳", "惠": "恵", "眞": "真", "龍": "竜",
+})
+# 末尾の巻番号（「100のモノが語る世界の歴史 1」）。「1984」のような数字だけの書名は残す
+_VOLUME_NUMBER = re.compile(r"(?<=\D{4})\d{1,2}$")
 
 
 def _norm(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text or "").lower()
+    text = unicodedata.normalize("NFKC", text or "").lower().translate(_ITAIJI)
     text = _PUNCT.sub("", _PAREN.sub("", text))
-    return _EDITION_TAIL.sub("", _EDITION_HEAD.sub("", text))
+    text = _EDITION_TAIL.sub("", _EDITION_HEAD.sub("", text))
+    return _VOLUME_NUMBER.sub("", text)
 
 
 def _main_title(text: str) -> str:
@@ -112,13 +126,30 @@ def titles_match(given: str, found: str) -> bool:
 
 
 def prefix_match(given: str, found: str) -> bool:
-    """一方の書名が、もう一方の書名の頭と一致するか（副題の有無の違い）。
-
-    別の本も拾いうるので、ISBN が引けていて著者も合うときの補助にだけ使う。
-    """
+    """一方の書名が、もう一方の書名の頭と一致するか（副題の有無の違い）"""
     g, f = _norm(given), _norm(found)
     shorter, longer = sorted((g, f), key=len)
     return len(shorter) >= 4 and longer.startswith(shorter)
+
+
+def _segments(text: str) -> list[str]:
+    """書名を副題の区切りで分けたもの（正規化済み・4文字以上だけ）"""
+    text = unicodedata.normalize("NFKC", _PAREN.sub("", text or ""))
+    return [s for s in (_norm(part) for part in _SUBTITLE.split(text)) if len(s) >= 4]
+
+
+def titles_overlap(given: str, found: str) -> bool:
+    """書名の一部が重なるか。titles_match より緩い。
+
+    書誌はシリーズ名や副題の位置がエージェントと違うことがある
+    （「イラスト図解 スマート工場のしくみ」と「スマート工場のしくみ : イラスト図解」、
+    「脳は美をどう感じるか アートの脳科学」と「脳は美をどう感じるか」）。
+    別の本も拾いうるので、ISBN が引けているときの補助にだけ使う。
+    """
+    if prefix_match(given, found):
+        return True
+    g_full, f_full = _norm(given), _norm(found)
+    return any(s in g_full for s in _segments(found)) or any(s in f_full for s in _segments(given))
 
 
 _ROLE = re.compile(r"(著|訳|編|監修|監訳|作|文|絵|本文|著者|編著|共著)$")
@@ -126,7 +157,7 @@ _JAPANESE = re.compile(r"[぀-ヿ㐀-鿿]")
 
 
 def _people(text: str | None) -> list[str]:
-    parts = re.split(r"[,，、/／;；&＆]", unicodedata.normalize("NFKC", text or ""))
+    parts = re.split(r"[,，、/／;；&＆]", unicodedata.normalize("NFKC", text or "").translate(_ITAIJI))
     names = []
     for part in parts:
         name = _ROLE.sub("", re.sub(r"[\s・=＝.]", "", part.strip())).lower()
@@ -135,10 +166,24 @@ def _people(text: str | None) -> list[str]:
     return names
 
 
+def _family_names(text: str | None) -> list[str]:
+    """カナ表記の外国人名の姓（「ジョン・カバットジン」→「カバットジン」）"""
+    parts = re.split(r"[,，、/／;；&＆]", unicodedata.normalize("NFKC", text or ""))
+    names = []
+    for part in parts:
+        pieces = [p for p in re.split(r"[・=＝\s]", part.strip()) if p]
+        if len(pieces) >= 2 and len(pieces[-1]) >= 3:
+            names.append(pieces[-1].lower())
+    return names
+
+
 def authors_match(given: str | None, found: str | None) -> bool:
-    """著者が一致するか（区切りや「著」「訳」の有無には甘め）"""
+    """著者が一致するか（区切りや「著」「訳」の有無、名の略し方には甘め）"""
     found_names = _people(found)
-    return any(g in f or f in g for g in _people(given) for f in found_names)
+    if any(g in f or f in g for g in _people(given) for f in found_names):
+        return True
+    # 「ジョン・カバットジン」と「J．カバットジン」のように名の書き方だけ違う
+    return any(family in f for family in _family_names(given) for f in found_names)
 
 
 def authors_comparable(given: str | None, found: str | None) -> bool:
@@ -151,6 +196,22 @@ def authors_comparable(given: str | None, found: str | None) -> bool:
     if not given or not found_names:
         return False
     return bool(_JAPANESE.search(given)) == bool(_JAPANESE.search(found_names[0]))
+
+
+# 並列書名（「アースダイバー = Earth Diver」の「= Earth Diver」）。次の副題の区切りか末尾まで
+_PARALLEL_TITLE = re.compile(r"\s[=＝]\s[^:：]*?(?=\s[:：]|$)")
+
+
+def clean_title(title: str, *authors: str | None) -> str:
+    """画面に出す書名に整える。書誌の癖（英語の並列書名、頭に付いた著者名）を落とす"""
+    text = _PARALLEL_TITLE.sub("", title).strip()
+    for author in authors:
+        first = re.split(r"[,，、/／]", author or "")[0].strip()
+        first = _ROLE.sub("", first).strip()
+        # 「デービッド・アトキンソン新・生産性立国論」→「新・生産性立国論」
+        if len(first) >= 3 and text.startswith(first) and len(text) > len(first) + 2:
+            text = text[len(first):].lstrip(" 　・:：")
+    return text
 
 
 def normalize_isbn(raw: str | None) -> str | None:
@@ -229,6 +290,11 @@ def cmd_targets(args) -> int:
             break
 
     work = Path(args.dir)
+    if any((work / "out").glob("*.json")):
+        # バッチ名（b01…）は回ごとに振り直すので、前の回の出力と混ざってしまう
+        print(f"! {work}/out/ に前の回の出力が残っています。apply 済みなら別の --dir で実行してください",
+              file=sys.stderr)
+        return 1
     batch_dir = work / "batches"
     batch_dir.mkdir(parents=True, exist_ok=True)
     for old in batch_dir.glob("*.json"):
@@ -236,6 +302,7 @@ def cmd_targets(args) -> int:
 
     (work / "targets.json").write_text(json.dumps({
         "mode": "replace" if args.replace else "fill",
+        "quota": quota,
         "books": targets,
     }, ensure_ascii=False, indent=1))
 
@@ -289,28 +356,38 @@ def _search(api: str, title: str, author: str | None) -> list[dict]:
     return found if status == 200 and isinstance(found, list) else []
 
 
-def _identify(api: str, cand: dict, use_search: bool):
-    """候補が実在するか書誌で確かめる。(書誌, 確かめ方) を返す。見つからなければ (None, 理由)"""
+def _identify(api: str, cand: dict, use_search: bool, accept: frozenset):
+    """候補が実在するか書誌で確かめる。(確かめ方, 書誌 or None, 一言) を返す。
+
+    確かめ方: isbn / partial（書名が一部だけ重なる）/ search（書名検索で特定）/
+    accepted（人が確かめて --accept した）/ mismatch（ISBN は別の書名を指す）/ unverified
+    """
     title = cand["title"].strip()
     isbn = normalize_isbn(cand.get("isbn"))
+    pointed = None  # ISBN が指している本（書名が合わなかったとき）
     if isbn:
         status, found = _get(api, f"/api/isbn/{isbn}")
-        if status == 200 and titles_match(title, found["title"]):
-            return found, "isbn"
-        if status == 200 and prefix_match(title, found["title"]):
-            # openBD は副題を持たないことがある（「脳は美をどう感じるか」だけ、など）
-            same = authors_match(cand.get("author"), found.get("author"))
-            return found, ("isbn" if same else "partial")
+        if status == 200:
+            if titles_match(title, found["title"]):
+                return "isbn", found, ""
+            if isbn in accept:
+                return "accepted", found, ""
+            if titles_overlap(title, found["title"]):
+                same = authors_match(cand.get("author"), found.get("author"))
+                return ("isbn" if same else "partial"), found, ""
+            pointed = found
     if use_search:
         for found in _search(api, title, cand.get("author")):
             if titles_match(title, found["title"]):
-                return found, "search"
+                return "search", found, ""
 
+    tail = "。書名検索でも見つからない" if use_search else ""
+    if pointed is not None:
+        # 表記の違いだけ（「ファクトフルネス」と「FACTFULNESS」）か、別の本の ISBN かは人が見る
+        return "mismatch", None, f"ISBN は「{pointed['title']} / {pointed.get('author')}」を指す{tail}"
     if cand.get("isbn") and not isbn:
-        why = "ISBNの形が不正（桁数かチェックディジットが合わない）"
-    else:
-        why = "ISBNで書名が一致しない"
-    return None, why + ("。書名検索でも見つからない" if use_search else "")
+        return "unverified", None, "ISBNの形が不正（桁数かチェックディジットが合わない）" + tail
+    return "unverified", None, "ISBNで本が見つからない" + tail
 
 
 def _check_shape(cand: dict) -> str | None:
@@ -326,15 +403,33 @@ def _check_shape(cand: dict) -> str | None:
     return None
 
 
-def verify_candidate(api: str, cand: dict, exclude: dict, use_search: bool = True):
-    """(状態, 流し込む形 or None, 一言) を返す。状態は ok / warn / invalid / unverified / excluded"""
+def verify_candidate(api: str, cand: dict, exclude: dict, use_search: bool = True,
+                     accept: frozenset = frozenset()):
+    """(状態, 流し込む形 or None, 一言) を返す。
+
+    状態は ok / warn / invalid / mismatch / unverified / excluded
+    """
     problem = _check_shape(cand)
     if problem:
         return "invalid", None, problem
+    state, book, note = resolve_book(api, cand, exclude, use_search, accept)
+    if book is None:
+        return state, None, note
+    row = {**book, "basis": cand["basis"], "distance": cand["distance"],
+           "reason": cand["reason"].strip()}
+    return state, row, note
 
-    info, how = _identify(api, cand, use_search)
+
+def resolve_book(api: str, cand: dict, exclude: dict, use_search: bool = True,
+                 accept: frozenset = frozenset()):
+    """候補の本が実在し、本棚にも「興味なし」にも無いかを確かめる。
+
+    (状態, {title, author, isbn, cover_url} or None, 一言) を返す。状態は
+    ok / warn / mismatch / unverified / excluded。キーワードのおすすめ（keyword-suggestions）も使う
+    """
+    how, info, detail = _identify(api, cand, use_search, accept)
     if info is None:
-        return "unverified", None, how
+        return how, None, detail
 
     if info["isbn"] in exclude["shelf_isbns"] or any(
         titles_match(info["title"], t) for t in exclude["shelf_titles"]
@@ -350,34 +445,38 @@ def verify_candidate(api: str, cand: dict, exclude: dict, use_search: bool = Tru
     # （画面で読みにくい）のときにエージェントのカナ表記を使う
     author = given_author if given_author and (same_author or not comparable) else info.get("author")
 
-    row = {
-        "title": info["title"],
+    book = {
+        "title": clean_title(info["title"], info.get("author"), given_author),
         "author": author,
         "isbn": info["isbn"],
         "cover_url": info.get("cover_url"),
-        "basis": cand["basis"],
-        "distance": cand["distance"],
-        "reason": cand["reason"].strip(),
     }
     notes = []
     if how == "search" and info["isbn"] != normalize_isbn(cand.get("isbn")):
         notes.append(f"書名検索で特定（ISBN {cand.get('isbn')} → {info['isbn']}）")
     if how == "partial":
-        notes.append(f"書名が頭だけ一致: 「{cand['title']}」/「{info['title']}」")
+        notes.append(f"書名が一部だけ一致: 「{cand['title']}」/「{info['title']}」")
     if comparable and not same_author:
         notes.append(f"著者が違う: 「{given_author}」/「{info.get('author')}」")
-    return ("warn" if notes else "ok"), row, "；".join(notes)
+    return ("warn" if notes else "ok"), book, "；".join(notes)
+
+
+def load_exclude(path: Path) -> dict:
+    """targets が書き出した exclude.json を、resolve_book に渡す形にする"""
+    raw = json.loads(path.read_text())
+    return {
+        "shelf_isbns": {b["isbn"] for b in raw["shelf"] if b.get("isbn")},
+        "shelf_titles": [b["title"] for b in raw["shelf"]],
+        "dismissed": set(raw["dismissed_isbns"]),
+    }
 
 
 def cmd_verify(args) -> int:
     work = Path(args.dir)
     targets = {t["book_id"]: t for t in json.loads((work / "targets.json").read_text())["books"]}
-    raw = json.loads((work / "exclude.json").read_text())
-    exclude = {
-        "shelf_isbns": {b["isbn"] for b in raw["shelf"] if b.get("isbn")},
-        "shelf_titles": [b["title"] for b in raw["shelf"]],
-        "dismissed": set(raw["dismissed_isbns"]),
-    }
+    exclude = load_exclude(work / "exclude.json")
+
+    accept = frozenset(filter(None, (normalize_isbn(x) for x in (args.accept or "").split(","))))
 
     inputs = [Path(p) for p in args.inputs] or sorted((work / "out").glob("*.json"))
     entries = []
@@ -397,7 +496,7 @@ def cmd_verify(args) -> int:
         left = dict(target["need"])
         rows = []
         for cand in entry.get("suggestions", []):
-            state, row, note = verify_candidate(args.api, cand, exclude, not args.no_search)
+            state, row, note = verify_candidate(args.api, cand, exclude, not args.no_search, accept)
             if row and row["isbn"] in seen:
                 state, row, note = "duplicate", None, "この本の候補にすでにある"
             elif row and left.get(row["distance"], 0) <= 0:
@@ -426,16 +525,42 @@ def cmd_verify(args) -> int:
 
 # ---------------------------------------------------------------- apply
 
+_KEEP = ("title", "author", "isbn", "cover_url", "basis", "distance", "reason")
+
+
+def merge_for_fill(existing: list[dict], rows: list[dict], quota: dict) -> tuple[list[dict], int]:
+    """補充モードで PUT する全件と、そのうち新しく足した数を返す。
+
+    同じ verified.json を2回 apply しても候補が倍にならないよう、既存と同じ ISBN は足さず、
+    距離ごとの上限（quota）を超える分も足さない。
+    """
+    payload = [{k: s[k] for k in _KEEP} for s in existing]
+    have_isbns = {s["isbn"] for s in payload if s.get("isbn")}
+    count = {d: sum(1 for s in payload if s["distance"] == d) for d in DISTANCES}
+    added = 0
+    for row in rows:
+        if row["isbn"] in have_isbns or count[row["distance"]] >= quota[row["distance"]]:
+            continue
+        payload.append(row)
+        have_isbns.add(row["isbn"])
+        count[row["distance"]] += 1
+        added += 1
+    # 近い本を先に並べる（ダイアログの既定「両方」で最初に見えるのは先頭3冊）
+    payload.sort(key=lambda r: r["distance"] != "near")
+    return payload, added
+
+
 def cmd_apply(args) -> int:
     work = Path(args.dir)
-    mode = json.loads((work / "targets.json").read_text())["mode"]
+    meta = json.loads((work / "targets.json").read_text())
     verified = json.loads((work / "verified.json").read_text())
     done = skipped = 0
     for book_id, rows in verified.items():
         if not rows:
             continue
-        if mode == "replace":
-            payload = rows
+        if meta["mode"] == "replace":
+            payload = sorted(rows, key=lambda r: r["distance"] != "near")
+            added = len(rows)
         else:
             existing = _existing(args.api, int(book_id))
             if any(s.get("added_book_id") for s in existing):
@@ -443,10 +568,11 @@ def cmd_apply(args) -> int:
                 print(f"  [skip] #{book_id} 積読に追加済みの候補があるので補充しない")
                 skipped += 1
                 continue
-            keep = ("title", "author", "isbn", "cover_url", "basis", "distance", "reason")
-            payload = [{k: s[k] for k in keep} for s in existing] + rows
-        # 近い本を先に並べる（ダイアログの既定「両方」で最初に見えるのは先頭3冊）
-        payload.sort(key=lambda r: r["distance"] != "near")
+            payload, added = merge_for_fill(existing, rows, meta["quota"])
+            if added == 0:
+                print(f"  [skip] #{book_id} 足すものが無い（登録済み）")
+                skipped += 1
+                continue
         if args.dry_run:
             print(f"  [dry ] #{book_id} {len(payload)} 冊: " + " / ".join(r["title"] for r in payload))
             continue
@@ -454,7 +580,7 @@ def cmd_apply(args) -> int:
         if status != 200:
             print(f"  [fail] #{book_id} {status}: {body}", file=sys.stderr)
             continue
-        print(f"  [ok  ] #{book_id} {len(payload)} 冊（うち新規 {len(rows)}）")
+        print(f"  [ok  ] #{book_id} {len(payload)} 冊（うち新規 {added}）")
         done += 1
     print(f"\n流し込み {done} 冊 / スキップ {skipped} 冊")
     return 0
@@ -480,6 +606,7 @@ def main() -> int:
     p.add_argument("--dir", required=True, help="作業ディレクトリ")
     p.add_argument("inputs", nargs="*", help="エージェントの出力（省略時は <dir>/out/*.json）")
     p.add_argument("--no-search", action="store_true", help="書名検索（遅い）での救済をしない")
+    p.add_argument("--accept", help="mismatch を人が確かめて通す ISBN（カンマ区切り）")
     p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("apply", help="照合済みの候補を流し込む")

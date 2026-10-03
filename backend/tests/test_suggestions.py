@@ -213,6 +213,29 @@ def test_候補を出し切ったらhas_moreがfalseになる(client):
     assert _get(client, book["id"])["has_more"] is False
 
 
+# --- 1ページの冊数を変える（本の詳細画面は候補を全部出す） ---
+
+def test_1ページの冊数を指定すればまとめて出せる(client):
+    book = _finished(client, "A")
+    _set(client, book["id"], [_candidate(title=f"候補{i}") for i in range(4)])
+    body = _get(client, book["id"], per_page=20)
+    assert [s["title"] for s in body["suggestions"]] == ["候補0", "候補1", "候補2", "候補3"]
+    assert body["has_more"] is False
+
+
+def test_1ページの冊数を大きくしても候補がなければhas_moreはfalse(client):
+    book = _finished(client, "A")
+    _set(client, book["id"], [_candidate()])
+    assert _get(client, book["id"], per_page=20)["has_more"] is False
+
+
+def test_1ページの冊数が0以下だと422になる(client):
+    book = _finished(client, "A")
+    assert client.get(
+        f"/api/books/{book['id']}/suggestions", params={"per_page": 0}
+    ).status_code == 422
+
+
 # --- 興味なし ---
 
 def test_興味なしにした本は以後出さない(client):
@@ -296,3 +319,55 @@ def test_本を削除すると候補も消える(client, db_engine):
     client.delete(f"/api/books/{book['id']}")
     with db_engine.connect() as conn:
         assert conn.execute(text("select count(*) from suggestions")).scalar() == 0
+
+
+# --- おすすめ一覧（全部の本の候補をまとめて） ---
+
+def _all(client):
+    response = client.get("/api/suggestions")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_候補が1件もなければおすすめ一覧は空(client):
+    _book(client, "候補のない本")
+    assert _all(client) == []
+
+
+def test_おすすめ一覧はどの本の候補かを添えて全部の本の候補を返す(client):
+    first = _book(client, "ピダハン", author="エヴェレット")
+    second = _book(client, "科学革命の構造")
+    _set(client, first["id"], [_candidate(title="数の発明")])
+    _set(client, second["id"], [_candidate(title="科学哲学の冒険")])
+
+    body = _all(client)
+
+    assert [(item["title"], item["book"]["title"]) for item in body] == [
+        ("数の発明", "ピダハン"),
+        ("科学哲学の冒険", "科学革命の構造"),
+    ]
+    assert body[0]["book"] == {"id": first["id"], "title": "ピダハン", "author": "エヴェレット"}
+
+
+def test_おすすめ一覧は本ごとに設定した順で並ぶ(client):
+    book = _book(client, "A")
+    _set(client, book["id"], [_candidate(title="1冊目"), _candidate(title="2冊目")])
+    assert [item["title"] for item in _all(client)] == ["1冊目", "2冊目"]
+
+
+def test_おすすめ一覧に興味なしにした本は出ない(client):
+    book = _book(client, "A")
+    _set(client, book["id"], [
+        _candidate(title="残る本", isbn="9784274224546"),
+        _candidate(title="外す本", isbn="9784274226298"),
+    ])
+    client.post("/api/suggestions/dismiss", params={"isbn": "9784274226298"})
+    assert [item["title"] for item in _all(client)] == ["残る本"]
+
+
+def test_おすすめ一覧でも積読に追加済みの印が分かる(client):
+    book = _book(client, "A")
+    suggestion = _set(client, book["id"], [_candidate()])[0]
+    created = client.post(f"/api/suggestions/{suggestion['id']}/add").json()
+    added = [item for item in _all(client) if item["id"] == suggestion["id"]]
+    assert added[0]["added_book_id"] == created["id"]

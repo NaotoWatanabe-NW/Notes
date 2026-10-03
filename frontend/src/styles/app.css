@@ -45,6 +45,18 @@ button {
   min-height: 0;
   overflow: hidden;
 }
+/* 一覧ペインを畳んだとき（レールの「隠す」・⌘B）。
+   要素は残して表示だけ消すので、戻したときに絞り込みや選択はそのまま */
+.panes-solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.panes-solo .list-pane {
+  display: none;
+}
+/* 畳んだぶん、詳細の本文を少し広く使う */
+.panes-solo .detail {
+  max-width: 1100px;
+}
 
 /* ───────────────────────────── A. アイコンレール */
 .rail {
@@ -363,7 +375,8 @@ button {
   width: 140px;
 }
 .input-page {
-  width: 110px;
+  /* プレースホルダ「ページ（任意）」が切れない幅 */
+  width: 148px;
 }
 
 /* 記録一覧 */
@@ -932,6 +945,142 @@ button {
   font-size: 12px;
 }
 
+/* ───────────────────────────── カテゴリとタグ（デザイン 8b「形で分ける」）
+   カテゴリは塗り、タグは枠なしの「#」文字。カテゴリごとの色は作らない */
+.cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cat-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-200);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.cat-chip:hover {
+  background: var(--color-neutral-300);
+}
+.cat-chip[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+/* 本の詳細の ▾ から開く選択肢。絞り込みより一回り大きい */
+.cat-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.cat-pick-label {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+  margin-right: 6px;
+}
+.cat-pick .cat-chip {
+  font-size: 13px;
+  padding: 5px 12px;
+}
+/* 状態の横に並ぶカテゴリ（押すと選択肢が開く） */
+.cat-tag-button {
+  font: inherit;
+  font-size: 11px;
+  border: 0;
+  gap: 4px;
+  cursor: pointer;
+}
+.cat-tag-button:hover {
+  background: var(--color-neutral-200);
+}
+/* 一覧の行のカテゴリ */
+.tag-mini {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+.row-cats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-neutral-700);
+  margin-top: 2px;
+}
+
+/* 本棚の「タグ」行。選んでいるタグは下線 */
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.tag-filter-label {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+.hash-filter {
+  font: inherit;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--color-neutral-800);
+  cursor: pointer;
+  text-underline-offset: 4px;
+}
+.hash-filter:hover {
+  color: var(--color-accent-700);
+}
+.hash-filter[aria-pressed='true'] {
+  color: var(--color-accent-700);
+  text-decoration: underline;
+}
+
+/* 本の詳細のタグ行 */
+.hash-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.hash-tag,
+.hash-add {
+  font: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.hash-tag {
+  color: var(--color-accent-700);
+}
+.hash-tag:hover {
+  color: var(--color-accent-900);
+}
+.hash-tag .ph-x {
+  font-size: 11px;
+}
+.hash-add {
+  color: var(--color-neutral-700);
+}
+.hash-add:hover {
+  color: var(--color-accent-700);
+}
+.hash-input {
+  width: 180px;
+  min-height: 28px;
+  font-size: 13px;
+  padding: 2px 8px;
+}
+
 /* ───────────────────────────── 読了の履歴 */
 .readings {
   display: flex;
@@ -1178,6 +1327,11 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
 }
+/* 本の詳細に並べる候補。ダイアログは3列固定だが、こちらは幅に合わせて折り返す
+   （既定の幅なら、近い本2・少し離れた本2の4冊が 2×2 に収まる） */
+.book-next-cards {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
 .next-card {
   display: flex;
   flex-direction: column;
@@ -1238,4 +1392,20 @@ button {
 .cover-picker-btn {
   font-size: 11px;
   padding: 2px 6px;
+}
+
+
+/* ───────────────────────────── おすすめ一覧（デザイン外の仮の画面） */
+/* 見た目は本棚・振り返りの一覧に合わせただけ。デザインが届いたら差し替える */
+.row-source {
+  justify-content: space-between;
+  align-items: baseline;
+}
+.row-count {
+  flex: none;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+.suggestion-group {
+  gap: 16px;
 }

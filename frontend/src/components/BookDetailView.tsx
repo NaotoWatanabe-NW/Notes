@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { BookDetail, BookUpdate, Note, NoteCreate, NoteKind } from '../api'
-import { KIND_LABELS, RECOMMEND_LABELS, STATUS_LABELS } from '../api'
+import { GENRE_LABELS, KIND_LABELS, RECOMMEND_LABELS, STATUS_LABELS } from '../api'
+import { PERCENT_TOTAL, pageFromPercent } from '../progress'
+import { BookSuggestions } from './BookSuggestions'
 import { CoverPicker } from './CoverPicker'
+import { GenrePicker } from './GenreChips'
+import { TagLine } from './HashTags'
 import { Markdown } from './Markdown'
 import { Segmented } from './Segmented'
 import { Stars } from './Stars'
-import { TagEditor } from './TagEditor'
 
 type Props = {
   book: BookDetail
@@ -17,9 +20,12 @@ type Props = {
   onDeleteNote: (note: Note) => void
   onWriteReport: () => void
   onDelete: () => void
-  /** 表紙を入れ替えたあと、データを取り直してもらう */
+  /** 表紙を入れ替えたあと、データを取り直してもらう。おすすめを積読に足したあとも呼ぶ */
   onReload: () => void
   onError: (message: string) => void
+  onNotify: (message: string) => void
+  /** タグを押したとき。本棚をそのタグで絞り込む */
+  onFilterTag: (tag: string) => void
 }
 
 const STATUS_TAG: Record<BookDetail['status'], string> = {
@@ -48,23 +54,39 @@ export function BookDetailView({
   onDelete,
   onReload,
   onError,
+  onNotify,
+  onFilterTag,
 }: Props) {
+  // カテゴリの ▾ を押して選択肢を開いているか
+  const [pickingGenre, setPickingGenre] = useState(false)
   const [panel, setPanel] = useState<'none' | 'note' | 'progress'>('none')
   const [draft, setDraft] = useState(EMPTY_DRAFT)
-  const [pageDraft, setPageDraft] = useState('')
+  // 進捗は％で入れてもらう（電子書籍はページが可変なので）
+  const [percentDraft, setPercentDraft] = useState('')
   const [editingNote, setEditingNote] = useState<number | null>(null)
-  const [noteEdit, setNoteEdit] = useState({ text: '', memo: '' })
+  const [noteEdit, setNoteEdit] = useState({ text: '', memo: '', page: '' })
 
   // 別の本に切り替えたら編集中の状態は捨てる
   useEffect(() => {
     setPanel('none')
     setDraft(EMPTY_DRAFT)
-    setPageDraft(String(book.page || ''))
+    setPercentDraft(String(book.progress ?? 0))
     setEditingNote(null)
-  }, [book.id, book.page])
+    // 進捗が変わったときも入力を入れ直す（％はページと総ページから出る）
+  }, [book.id, book.progress])
 
+  /**
+   * 記録のパネルを開く。
+   *
+   * 「メモを書く」から開くので **メモで始める**。引用で始めると、本文（必須）と
+   * 「自分のメモ（任意）」の2欄が出て、メモのつもりで任意の欄に書いた人が
+   * 保存できない（ボタンが disabled のまま）ところで詰まる。
+   * 引用はセグメントで1クリックで切り替えられる。
+   */
   function openNotePanel(kind: NoteKind) {
-    setDraft({ ...EMPTY_DRAFT, kind, page: book.page ? String(book.page) : '' })
+    // ページは空で開く。電子書籍だと表示設定でページが変わるので、
+    // 進捗のページを既定で入れると当てにならない数字が残る
+    setDraft({ ...EMPTY_DRAFT, kind })
     setPanel('note')
   }
 
@@ -81,10 +103,16 @@ export function BookDetailView({
   }
 
   function saveProgress() {
-    const next = Number(pageDraft)
-    if (!Number.isFinite(next) || next < 0) return
-    // 最後のページまで読んだらサーバー側が状態を「読了」に変える
-    onUpdate({ page: next, status: book.status === 'unread' ? 'reading' : undefined })
+    const percent = Number(percentDraft)
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) return
+    // 総ページが分からない本（電子書籍など）は 100 を分母にして、％をそのまま持つ
+    const total = book.total ?? PERCENT_TOTAL
+    // 保存はページで持つ。100％まで読んだらサーバー側が状態を「読了」に変える
+    onUpdate({
+      ...(book.total ? {} : { total: PERCENT_TOTAL }),
+      page: pageFromPercent(percent, total),
+      status: book.status === 'unread' ? 'reading' : undefined,
+    })
     setPanel('none')
   }
 
@@ -112,10 +140,20 @@ export function BookDetailView({
           onError={onError}
         />
         <div className="book-head-main">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className={`tag ${STATUS_TAG[book.status]}`}>
               {STATUS_LABELS[book.status]}
             </span>
+            <button
+              type="button"
+              className="tag tag-neutral cat-tag-button"
+              title="カテゴリを変更"
+              aria-expanded={pickingGenre}
+              onClick={() => setPickingGenre((prev) => !prev)}
+            >
+              {GENRE_LABELS[book.genre]}
+              <i className="ph-duotone ph-caret-down" />
+            </button>
             {book.read_count > 1 ? (
               <span className="tag tag-neutral">{book.read_count}回読了</span>
             ) : null}
@@ -135,14 +173,26 @@ export function BookDetailView({
           <p className="book-byline" style={{ margin: 0 }}>
             {[book.author, book.publisher].filter(Boolean).join(' · ') || '著者不明'}
           </p>
-          {book.status === 'finished' ? (
-            <Stars value={book.rating} onChange={(rating) => onUpdate({ rating })} />
-          ) : null}
-          <TagEditor
+          <TagLine
             tags={book.tags}
             suggestions={tagSuggestions}
             onChange={(tags) => onUpdate({ tags })}
+            onSelect={onFilterTag}
           />
+          {pickingGenre ? (
+            <GenrePicker
+              value={book.genre}
+              onChange={(genre) => {
+                setPickingGenre(false)
+                if (genre === book.genre) return
+                onUpdate({ genre })
+                onNotify(`カテゴリを「${GENRE_LABELS[genre]}」にしました`)
+              }}
+            />
+          ) : null}
+          {book.status === 'finished' ? (
+            <Stars value={book.rating} onChange={(rating) => onUpdate({ rating })} />
+          ) : null}
         </div>
       </header>
 
@@ -150,12 +200,9 @@ export function BookDetailView({
       {book.status === 'reading' && book.total ? (
         <section className="stack">
           <div className="progress-line">
+            <span>{book.progress}%</span>
             <span>
-              p.{book.page} / {book.total}
-            </span>
-            <span>
-              {book.started_on ? `${shortDate(book.started_on)}から · ` : ''}
-              {book.progress}%
+              {book.started_on ? `${shortDate(book.started_on)}から` : ''}
             </span>
           </div>
           <div className="progress-bar">
@@ -198,7 +245,7 @@ export function BookDetailView({
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => openNotePanel('quote')}
+              onClick={() => openNotePanel('memo')}
             >
               <i className="ph-duotone ph-pencil-simple-line" />
               メモを書く
@@ -226,7 +273,7 @@ export function BookDetailView({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => openNotePanel('quote')}
+              onClick={() => openNotePanel('memo')}
             >
               メモを追加
             </button>
@@ -242,16 +289,18 @@ export function BookDetailView({
       {panel === 'progress' ? (
         <div className="panel">
           <div className="panel-row">
-            <label htmlFor="page-input">読んだページ</label>
+            <label htmlFor="percent-input">読んだところ</label>
             <input
-              id="page-input"
+              id="percent-input"
               className="input input-narrow"
               type="number"
               min={0}
-              value={pageDraft}
-              onChange={(e) => setPageDraft(e.target.value)}
+              max={100}
+              value={percentDraft}
+              onChange={(e) => setPercentDraft(e.target.value)}
+              autoFocus
             />
-            {book.total ? <span className="muted">/ {book.total}</span> : null}
+            <span className="muted">%</span>
           </div>
           <div className="panel-actions">
             <button
@@ -290,7 +339,7 @@ export function BookDetailView({
               className="input input-page"
               type="number"
               min={1}
-              placeholder="ページ"
+              placeholder="ページ（任意）"
               value={draft.page}
               onChange={(e) => setDraft({ ...draft, page: e.target.value })}
             />
@@ -303,6 +352,7 @@ export function BookDetailView({
             }
             value={draft.text}
             onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+            autoFocus
           />
           {draft.kind === 'quote' ? (
             <input
@@ -313,6 +363,12 @@ export function BookDetailView({
             />
           ) : null}
           <div className="panel-actions">
+            {/* 「自分のメモ」だけ書いて保存できないときに、理由が分かるようにする */}
+            {!draft.text.trim() && draft.memo.trim() ? (
+              <span className="muted" style={{ fontSize: 12, marginRight: 'auto' }}>
+                引用の本文を入れると保存できます。メモだけ残すなら「メモ」に切り替えてください
+              </span>
+            ) : null}
             <button
               type="button"
               className="btn btn-ghost"
@@ -332,11 +388,18 @@ export function BookDetailView({
         </div>
       ) : null}
 
+      {/* ── 次に読む本（設定してある候補があるときだけ中身が出る） ── */}
+      <BookSuggestions bookId={book.id} onAdded={onReload} onError={onError} />
+
       {/* ── 記録一覧 ── */}
       <section className="stack" style={{ gap: 20 }}>
         <div className="section-head">
           <h2 className="section-title">メモ・引用 {notes.length}件</h2>
-          {notes.length > 0 ? <span className="section-aside">ページ順</span> : null}
+          {notes.length > 0 ? (
+            <span className="section-aside">
+              {notes.some((note) => note.page) ? 'ページ順' : '新しい順'}
+            </span>
+          ) : null}
         </div>
 
         {notes.length === 0 ? (
@@ -361,7 +424,11 @@ export function BookDetailView({
                       style={{ fontSize: 12 }}
                       onClick={() => {
                         setEditingNote(note.id)
-                        setNoteEdit({ text: note.text, memo: note.memo ?? '' })
+                        setNoteEdit({
+                          text: note.text,
+                          memo: note.memo ?? '',
+                          page: note.page ? String(note.page) : '',
+                        })
                       }}
                     >
                       編集
@@ -395,6 +462,17 @@ export function BookDetailView({
                         }
                       />
                     ) : null}
+                    {/* ページは後からでも足せる・消せる（空にすれば消える） */}
+                    <input
+                      className="input input-page"
+                      type="number"
+                      min={1}
+                      placeholder="ページ（任意）"
+                      value={noteEdit.page}
+                      onChange={(e) =>
+                        setNoteEdit({ ...noteEdit, page: e.target.value })
+                      }
+                    />
                     <div className="panel-actions">
                       <button
                         type="button"
@@ -411,6 +489,7 @@ export function BookDetailView({
                           onUpdateNote(note.id, {
                             text: noteEdit.text.trim(),
                             memo: noteEdit.memo.trim() || null,
+                            page: noteEdit.page ? Number(noteEdit.page) : null,
                           })
                           setEditingNote(null)
                         }}

@@ -5,8 +5,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from .database import Base, engine
-from .routers import books, lookup, notes, reviews, settings, suggestions, tags
+from .database import Base, add_missing_columns, engine
+from .routers import books, lookup, notes, reviews, settings, suggestions, tags, topics
 
 # frontend/dist（npm run build の出力）。backend/app/main.py から2つ上が Notes/
 DIST_DIR = (Path(__file__).resolve().parents[2] / "frontend" / "dist").resolve()
@@ -21,6 +21,8 @@ async def lifespan(app: FastAPI):
     触ってしまうので、起動時まで遅らせている。
     """
     Base.metadata.create_all(bind=engine)
+    # 既存のテーブルに後から足した列（create_all では反映されない）
+    add_missing_columns(engine)
     yield
 
 
@@ -36,6 +38,7 @@ app.include_router(reviews.router)
 app.include_router(settings.router)
 app.include_router(suggestions.router)
 app.include_router(tags.router)
+app.include_router(topics.router)
 
 
 # ② 最後に登録する ＝ 他のどのルートにも一致しなかったときだけ通る。

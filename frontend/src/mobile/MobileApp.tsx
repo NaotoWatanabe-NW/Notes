@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import type { BookInfo, BookStatus } from '../api'
+import type { Book, BookInfo, BookStatus, Genre } from '../api'
 import { lookupIsbn } from '../api'
 import { Toast } from '../components/Toast'
 import type { NoteFilter } from '../types'
 import type { AppData } from '../useAppData'
+import { filtersRevealing } from '../visibility'
 import { BookScreen } from './BookScreen'
 import { LibraryScreen } from './LibraryScreen'
 import { NextBookSheet } from './NextBookSheet'
@@ -13,6 +14,7 @@ import { ReportScreen } from './ReportScreen'
 import { ReviewScreen } from './ReviewScreen'
 import { SearchScreen } from './SearchScreen'
 import { SettingsScreen } from './SettingsScreen'
+import { SuggestionsScreen } from './SuggestionsScreen'
 import type { MobileTab } from './TabBar'
 import { TabBar } from './TabBar'
 
@@ -47,21 +49,36 @@ export function MobileApp({ data }: { data: AppData }) {
 
   const [tab, setTab] = useState<MobileTab>('library')
   const [libraryFilter, setLibraryFilter] = useState<BookStatus | 'all'>('all')
+  const [genreFilter, setGenreFilter] = useState<Genre | null>(null)
+  // 本の詳細でタグを押したときだけ入る（7b → 7a）
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [noteFilter, setNoteFilter] = useState<NoteFilter>(null)
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [writingBookId, setWritingBookId] = useState<number | null>(null)
+  // 読了シートから積読に足したとき、詳細の「次に読む本」を取り直すための目印
+  const [detailEpoch, setDetailEpoch] = useState(0)
 
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? null
   const writingBook =
     writingBookId !== null && bookDetail?.id === writingBookId ? bookDetail : null
 
-  /** 本棚でその本を開く。絞り込みで隠れるなら「すべて」に戻す */
+  /** その本を隠してしまう絞り込みだけを外す（PC版の unhideBook と同じ） */
+  function unhideBook(book: Book) {
+    const next = filtersRevealing(book, {
+      status: libraryFilter === 'all' ? null : libraryFilter,
+      tag: tagFilter,
+      genre: genreFilter,
+    })
+    setLibraryFilter(next.status ?? 'all')
+    setTagFilter(next.tag)
+    setGenreFilter(next.genre)
+  }
+
+  /** 本棚でその本を開く。絞り込みで隠れるなら外す */
   function openBook(id: number) {
     const book = books.find((item) => item.id === id)
-    if (book && libraryFilter !== 'all' && book.status !== libraryFilter) {
-      setLibraryFilter('all')
-    }
+    if (book) unhideBook(book)
     setTab('library')
     setShowSettings(false)
     setSelectedBookId(id)
@@ -81,7 +98,7 @@ export function MobileApp({ data }: { data: AppData }) {
         total: full.total,
         status: 'unread',
       })
-      setLibraryFilter('all')
+      unhideBook(created)
       notify(`「${created.title}」を積読に追加しました`)
     } catch (error) {
       fail(error, '本を追加できませんでした')
@@ -105,6 +122,8 @@ export function MobileApp({ data }: { data: AppData }) {
       if (bookDetail) {
         return (
           <BookScreen
+            // シートで積読に足したあと、詳細側の候補にも印を出すために組み直す
+            key={`${bookDetail.id}-${detailEpoch}`}
             book={bookDetail}
             notes={bookNotes}
             onBack={() => setSelectedBookId(null)}
@@ -115,6 +134,14 @@ export function MobileApp({ data }: { data: AppData }) {
             onDelete={() => removeBook(bookDetail)}
             onReload={() => void reload()}
             onError={setToast}
+            onNotify={notify}
+            onFilterTag={(tag) => {
+              // そのタグで絞り込んだ本棚を開く（7b）
+              setTagFilter(tag)
+              setLibraryFilter('all')
+              setGenreFilter(null)
+              setSelectedBookId(null)
+            }}
           />
         )
       }
@@ -123,6 +150,10 @@ export function MobileApp({ data }: { data: AppData }) {
           books={books}
           filter={libraryFilter}
           onFilter={setLibraryFilter}
+          genreFilter={genreFilter}
+          onGenreFilter={setGenreFilter}
+          tagFilter={tagFilter}
+          onTagFilter={setTagFilter}
           onSelect={setSelectedBookId}
           onSearch={() => setTab('search')}
           onSettings={() => setShowSettings(true)}
@@ -154,6 +185,17 @@ export function MobileApp({ data }: { data: AppData }) {
 
     if (tab === 'review') {
       return <ReviewScreen version={books.length + notes.length} onOpenBook={openBook} />
+    }
+
+    if (tab === 'suggestions') {
+      return (
+        <SuggestionsScreen
+          books={books}
+          onOpenBook={openBook}
+          onAdded={() => void reload()}
+          onError={setToast}
+        />
+      )
     }
 
     return (
@@ -213,6 +255,9 @@ export function MobileApp({ data }: { data: AppData }) {
           onAdded={() => {
             void reload()
             setLibraryFilter('all')
+            setGenreFilter(null)
+            setTagFilter(null)
+            setDetailEpoch((prev) => prev + 1)
           }}
           onWriteReport={() => {
             setWritingBookId(justFinished)

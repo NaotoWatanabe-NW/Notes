@@ -37,7 +37,9 @@
 .m-tabs {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* タブの数に合わせて等分する（デザインは4つ。「おすすめ」を仮に足して5つ） */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   padding: 8px 0 28px;
   background: var(--color-bg);
   /* 罫は引かず、薄い影だけで段差を作る */
@@ -651,4 +653,53 @@
   color: var(--color-neutral-700);
   padding: 24px 0;
   line-height: 1.8;
+}
+
+
+/* ── おすすめ（デザイン外の仮の画面） ───────────────────── */
+.m-source-group {
+  margin-bottom: 26px;
+}
+.m-source-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── カテゴリとタグ（7a・7b、デザイン 8b） ───────────────── */
+/* カテゴリの絞り込みは1行で横にスクロールさせる。端まで出すので .m-bleed の中に置く */
+.cat-chips-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 20px;
+}
+.cat-chips-scroll::-webkit-scrollbar {
+  display: none;
+}
+.cat-chips-scroll .cat-chip {
+  flex: none;
+  padding: 6px 11px;
+}
+.m-row-cats {
+  font-size: 12px;
+}
+/* 本の詳細のタグから絞り込んでいるとき、本棚に出す目印 */
+.m-tag-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-accent-700);
+  margin-bottom: 12px;
 }
