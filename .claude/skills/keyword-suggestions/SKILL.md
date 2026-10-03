@@ -92,7 +92,7 @@ next-book-suggestions の SKILL.md の表と同じ。このスキルで増える
 
 | 状態 | 意味 |
 |---|---|
-| invalid | 区分（slot）が不正、`from_book_id` が本棚に無い、理由が空か長すぎる |
+| invalid | 区分（slot）やカテゴリ（category）が不正、`from_book_id` が本棚に無い、理由が空か長すぎる |
 | duplicate | このキーワードの候補にすでにある |
 | extra | near / far が頼んだ数を超えた |
 

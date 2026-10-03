@@ -703,3 +703,169 @@
   color: var(--color-accent-700);
   margin-bottom: 12px;
 }
+
+/* ── おすすめ（7a の帯・7h 一覧・7i シート、デザイン J） ───────── */
+.m-sheet-mid {
+  height: 64%;
+}
+.m-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-accent-700);
+  cursor: pointer;
+}
+.m-rec-strip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--color-neutral-700);
+  margin-bottom: 12px;
+}
+/* .m-screen-flush > .m-bleed が左右の余白を消すので、詳細度を合わせて後から入れ直す */
+.m-bleed.m-rec-strip {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 20px 4px;
+  margin-bottom: 22px;
+}
+.m-rec-strip::-webkit-scrollbar {
+  display: none;
+}
+.m-rec-tile {
+  flex: none;
+  width: 84px;
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.m-rec-tile-title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.m-rec-tile-cat {
+  font-size: 10px;
+  color: var(--color-neutral-700);
+}
+
+.m-rec-head {
+  margin-bottom: 18px;
+}
+.m-rec-list {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 24px;
+}
+.m-rec-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 14px;
+  align-items: start;
+}
+.m-rec-open {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.m-rec-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.m-rec-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.m-rec-reason {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.m-rec-add {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+.m-rec-done {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+  font-size: 18px;
+}
+
+.m-rec-sheet {
+  display: grid;
+  grid-auto-rows: max-content;
+  gap: 20px;
+  padding: 4px 22px 30px;
+}
+.m-rec-sheet-head {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+}
+.m-rec-sheet-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  justify-items: start;
+}
+.m-rec-sheet-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.m-rec-sheet-meta {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.m-rec-sheet-reason {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.m-rec-sheet-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.m-rec-sheet-actions .btn {
+  min-height: 44px;
+}
+.m-rec-note {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}

@@ -405,13 +405,36 @@ export const setSuggestions = (bookId: number, items: SuggestionWrite[]) =>
 export const addSuggestionToShelf = (suggestionId: number) =>
   request<BookDetail>(`/api/suggestions/${suggestionId}/add`, { method: 'POST' })
 
-/** おすすめ一覧で候補に添える「どの本の候補か」（その本を読み終えたときに出す） */
-export type SuggestionSource = { id: number; title: string; author: string | null }
+/** おすすめ一覧の1冊が、どこから選ばれたか（本を読み終えたときの候補 / キーワード） */
+export type RecommendationSource = {
+  kind: 'book' | 'topic'
+  /** 本なら書名、キーワードならキーワード */
+  label: string
+  book_id: number | null
+  reason: string
+}
 
-export type SuggestionWithBook = Suggestion & { book: SuggestionSource }
+/** おすすめ一覧（デザイン J）の1冊。同じ本の候補は1つにまとまっている */
+export type Recommendation = {
+  isbn: string
+  title: string
+  author: string | null
+  cover_url: string | null
+  genre: Genre
+  publisher: string | null
+  total: number | null
+  sources: RecommendationSource[]
+}
 
-/** 設定してある「次に読む本」を全部、どの本の候補かを添えて取る（おすすめ一覧） */
-export const listAllSuggestions = () => request<SuggestionWithBook[]>('/api/suggestions')
+/** おすすめ一覧。本棚にある本と「興味なし」にした本は入っていない */
+export const listRecommendations = () => request<Recommendation[]>('/api/recommendations')
+
+/** おすすめを積読として本棚に追加する（同じ本の候補すべてに追加済みの印が付く） */
+export const addRecommendation = (isbn: string) =>
+  request<BookDetail>('/api/recommendations/add', {
+    method: 'POST',
+    body: JSON.stringify({ isbn }),
+  })
 
 /** 「興味なし」。以後のおすすめから外す */
 export const dismissSuggestion = (isbn: string) =>

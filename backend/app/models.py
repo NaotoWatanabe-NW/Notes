@@ -248,6 +248,10 @@ class Suggestion(Base):
     distance: Mapped[Distance] = mapped_column(_values_enum(Distance, "distance"))
     # 理由は一言で（デザインの指定）
     reason: Mapped[str] = mapped_column(Text)
+    # おすすめ一覧（デザイン J）で使う。カテゴリで絞り込み、詳細に出版社・ページ数を出す
+    genre: Mapped[Genre | None] = mapped_column(_values_enum(Genre, "genre"))
+    publisher: Mapped[str | None] = mapped_column(String(255))
+    total: Mapped[int | None]
     # 画面に出す順番
     position: Mapped[int] = mapped_column(default=0)
     # 積読に追加したら、その本の id を控える（開き直しても分かるように）
@@ -316,6 +320,10 @@ class TopicSuggestion(Base):
     cover_url: Mapped[str | None] = mapped_column(String(500))
     distance: Mapped[Distance] = mapped_column(_values_enum(Distance, "distance"))
     reason: Mapped[str] = mapped_column(Text)
+    # おすすめ一覧（デザイン J）で使う。Suggestion と同じ
+    genre: Mapped[Genre | None] = mapped_column(_values_enum(Genre, "genre"))
+    publisher: Mapped[str | None] = mapped_column(String(255))
+    total: Mapped[int | None]
     # 手がかりにした本棚の本（「『〇〇』より一段深く」の〇〇）。無ければ null
     from_book_id: Mapped[int | None] = mapped_column(
         ForeignKey("books.id", ondelete="SET NULL")

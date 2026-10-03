@@ -17,12 +17,11 @@ import { ReviewView } from './components/ReviewView'
 import type { SettingsSection } from './components/SettingsPane'
 import { SettingsPane } from './components/SettingsPane'
 import { SettingsView } from './components/SettingsView'
-import { SuggestionsPane } from './components/SuggestionsPane'
-import { SuggestionsView } from './components/SuggestionsView'
+import { RecommendationsPane } from './components/RecommendationsPane'
+import { RecommendationView } from './components/RecommendationView'
 import { Toast } from './components/Toast'
 import type { LibraryFilter, NoteFilter, View } from './types'
-import { groupBySource, markShelved, matchesKeyword } from './suggestionSearch'
-import { useAllSuggestions } from './useAllSuggestions'
+import { useRecommendations } from './useRecommendations'
 import { filtersRevealing } from './visibility'
 
 export function DesktopShell({ data }: { data: AppData }) {
@@ -64,8 +63,8 @@ export function DesktopShell({ data }: { data: AppData }) {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('goal')
   const [period, setPeriod] = useState<string | null>(null)
   // おすすめ一覧のキーワードと、選んでいる本（null は「すべての本から」）
-  const [suggestionQuery, setSuggestionQuery] = useState('')
-  const [suggestionSourceId, setSuggestionSourceId] = useState<number | null>(null)
+  const [recGenre, setRecGenre] = useState<api.Genre | null>(null)
+  const [selectedRecIsbn, setSelectedRecIsbn] = useState<string | null>(null)
 
   const [review, setReview] = useState<Review | null>(null)
   const [yearReview, setYearReview] = useState<Review | null>(null)
@@ -216,26 +215,15 @@ export function DesktopShell({ data }: { data: AppData }) {
   const writingBook =
     writingBookId !== null && bookDetail?.id === writingBookId ? bookDetail : null
 
-  const allSuggestions = useAllSuggestions(view === 'suggestions', {
+  const recs = useRecommendations(view === 'suggestions', {
     onAdded: () => void reload(),
+    onNotify: setToast,
     onError: setToast,
   })
-  const suggestionGroups = useMemo(
-    () =>
-      groupBySource(
-        markShelved(allSuggestions.items, books).filter((item) =>
-          matchesKeyword(item, suggestionQuery),
-        ),
-      ),
-    [allSuggestions.items, books, suggestionQuery],
-  )
-  // 選んでいる本の候補がキーワードで全部消えたら、「すべての本から」を出す
-  const selectedSuggestionGroup = suggestionGroups.find(
-    (group) => group.book.id === suggestionSourceId,
-  )
-  const shownSuggestionGroups = selectedSuggestionGroup
-    ? [selectedSuggestionGroup]
-    : suggestionGroups
+  // 選んでいる本がカテゴリで隠れたら（興味なしにして消えたときも）、一覧の先頭を出す
+  const visibleRecs = recs.items.filter((item) => recGenre === null || item.genre === recGenre)
+  const selectedRec =
+    visibleRecs.find((item) => item.isbn === selectedRecIsbn) ?? visibleRecs[0] ?? null
 
   function renderList() {
     if (view === 'library') {
@@ -276,14 +264,14 @@ export function DesktopShell({ data }: { data: AppData }) {
     }
     if (view === 'suggestions') {
       return (
-        <SuggestionsPane
-          groups={suggestionGroups}
-          total={suggestionGroups.reduce((sum, group) => sum + group.items.length, 0)}
-          query={suggestionQuery}
-          onQuery={setSuggestionQuery}
-          selectedId={selectedSuggestionGroup?.book.id ?? null}
-          onSelect={setSuggestionSourceId}
-          loading={allSuggestions.loading}
+        <RecommendationsPane
+          items={recs.items}
+          added={recs.added}
+          genre={recGenre}
+          onGenre={setRecGenre}
+          selectedIsbn={selectedRec?.isbn ?? null}
+          onSelect={setSelectedRecIsbn}
+          loading={recs.loading}
         />
       )
     }
@@ -371,13 +359,12 @@ export function DesktopShell({ data }: { data: AppData }) {
     }
     if (view === 'suggestions') {
       return (
-        <SuggestionsView
-          groups={shownSuggestionGroups}
-          query={suggestionQuery}
-          loading={allSuggestions.loading}
+        <RecommendationView
+          item={selectedRec}
+          addedBookId={selectedRec ? recs.added.get(selectedRec.isbn) : undefined}
+          onAdd={() => selectedRec && void recs.add(selectedRec)}
+          onDismiss={() => selectedRec && void recs.dismiss(selectedRec)}
           onOpenBook={openBookById}
-          onAdd={(item) => void allSuggestions.add(item)}
-          onDismiss={(item) => void allSuggestions.dismiss(item)}
         />
       )
     }

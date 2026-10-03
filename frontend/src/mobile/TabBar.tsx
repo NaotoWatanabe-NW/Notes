@@ -1,15 +1,13 @@
-export type MobileTab = 'library' | 'notes' | 'review' | 'suggestions' | 'search'
+export type MobileTab = 'library' | 'notes' | 'review' | 'search'
 
 const TABS: { key: MobileTab; label: string; icon: string }[] = [
   { key: 'library', label: '本棚', icon: 'ph-books' },
   { key: 'notes', label: 'メモ', icon: 'ph-quotes' },
   { key: 'review', label: '振り返り', icon: 'ph-chart-line-up' },
-  // デザインのタブバーは4つ。5つ目は仮置きで、デザインが届いたら合わせる
-  { key: 'suggestions', label: 'おすすめ', icon: 'ph-lightbulb' },
   { key: 'search', label: '探す', icon: 'ph-magnifying-glass' },
 ]
 
-/** 下部のタブバー（デザイン #7a〜7e 共通。「おすすめ」だけデザイン外） */
+/** 下部のタブバー（デザイン #7a〜7e 共通）。おすすめはタブを増やさず本棚の中に出す（7a） */
 export function TabBar({
   tab,
   onChange,

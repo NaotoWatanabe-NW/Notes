@@ -5,6 +5,7 @@
 import pytest
 
 from nbs import (
+    _check_shape,
     authors_comparable,
     authors_match,
     clean_title,
@@ -111,7 +112,8 @@ def test_normalize_isbn_returns_none_for_bad_check_digit_or_wrong_length(raw):
 
 def _row(isbn: str, distance: str) -> dict:
     return {"title": f"本{isbn}", "author": "著者", "isbn": isbn, "cover_url": None,
-            "basis": "tag", "distance": distance, "reason": "理由"}
+            "basis": "tag", "distance": distance, "reason": "理由",
+            "genre": "academic", "publisher": None, "total": None}
 
 
 QUOTA = {"near": 2, "far": 2}
@@ -147,7 +149,8 @@ def test_merge_for_fill_drops_server_only_fields_from_existing():
     existing = [{**_row("1", "near"), "id": 10, "added_book_id": None}]
     payload, _ = merge_for_fill(existing, [], QUOTA)
 
-    assert set(payload[0]) == {"title", "author", "isbn", "cover_url", "basis", "distance", "reason"}
+    assert set(payload[0]) == {"title", "author", "isbn", "cover_url", "basis", "distance", "reason",
+                               "genre", "publisher", "total"}
 
 
 @pytest.mark.parametrize("given, found", [
@@ -188,3 +191,10 @@ def test_clean_title_drops_parallel_title_and_leading_author_name(title, author,
 def test_clean_title_keeps_title_that_merely_equals_author_name():
     # 書名が著者名そのもの（評伝など）は削らない
     assert clean_title("孔子", "孔子") == "孔子"
+
+
+def test_check_shape_requires_category_from_the_six_labels():
+    base = {"title": "本", "distance": "near", "basis": "tag", "reason": "理由"}
+    assert _check_shape(base | {"category": "学術"}) is None
+    assert "category" in _check_shape(base | {"category": "教養"})
+    assert "category" in _check_shape(base)

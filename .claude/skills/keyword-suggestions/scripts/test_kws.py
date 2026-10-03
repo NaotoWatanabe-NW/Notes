@@ -68,7 +68,7 @@ def test_need_for_counts_existing_by_distance():
 
 def _cand(**fields):
     base = {"title": "ゲーム理論入門の入門", "slot": "same", "from_book_id": 28,
-            "reason": "数式なしで全体をつかめます"}
+            "reason": "数式なしで全体をつかめます", "category": "学術"}
     return base | fields
 
 
@@ -82,6 +82,7 @@ def test_check_shape_accepts_well_formed_candidate():
     ({"slot": "near"}, "slot が不正"),
     ({"reason": "あ" * 201}, "200字超"),
     ({"from_book_id": 999}, "本棚に無い"),
+    ({"category": "教養"}, "category が不正"),
 ])
 def test_check_shape_rejects_bad_candidate(fields, message):
     assert message in check_shape(_cand(**fields), {28})
@@ -90,7 +91,8 @@ def test_check_shape_rejects_bad_candidate(fields, message):
 def _row(isbn, slot):
     distance = "far" if slot == "side" else "near"
     return {"title": f"本{isbn}", "author": "著者", "isbn": isbn, "cover_url": None,
-            "distance": distance, "reason": "理由", "from_book_id": None, "slot": slot}
+            "distance": distance, "reason": "理由", "from_book_id": None, "slot": slot,
+            "genre": "academic", "publisher": None, "total": None}
 
 
 QUOTA = {"near": 4, "far": 2}
@@ -132,5 +134,6 @@ def test_merge_for_topic_sends_only_fields_the_api_accepts():
     existing = [{**_row("1", "same"), "id": 10, "added_book_id": None}]
     payload, _ = merge_for_topic(existing, [_row("2", "side")], QUOTA)
 
-    expected = {"title", "author", "isbn", "cover_url", "distance", "reason", "from_book_id"}
+    expected = {"title", "author", "isbn", "cover_url", "distance", "reason", "from_book_id",
+                "genre", "publisher", "total"}
     assert all(set(r) == expected for r in payload)

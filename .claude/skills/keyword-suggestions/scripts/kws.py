@@ -24,7 +24,8 @@ SLOT_DISTANCE = {"same": "near", "adjacent": "near", "side": "far"}
 SLOT_LABELS = {"same": "同じテーマ", "adjacent": "近いテーマ", "side": "少し離れた"}
 GENRES = ("study", "novel", "essay", "selfhelp")
 # PUT する項目。区分（slot）は DB に無いので落とす
-_KEEP = ("title", "author", "isbn", "cover_url", "distance", "reason", "from_book_id")
+_KEEP = ("title", "author", "isbn", "cover_url", "distance", "reason", "from_book_id",
+         "genre", "publisher", "total")
 
 
 def normalize_keyword(text: str) -> str:
@@ -79,6 +80,8 @@ def check_shape(cand: dict, shelf_ids: set[int]) -> str | None:
     from_id = cand.get("from_book_id")
     if from_id is not None and from_id not in shelf_ids:
         return f"from_book_id {from_id} は本棚に無い"
+    if cand.get("category") not in nbs.GENRE_BY_LABEL:
+        return f"category が不正: {cand.get('category')}"
     return None
 
 
@@ -299,6 +302,7 @@ def cmd_verify(args) -> int:
                     "distance": SLOT_DISTANCE[cand["slot"]],
                     "reason": cand["reason"].strip(),
                     "from_book_id": cand.get("from_book_id"),
+                    "genre": nbs.GENRE_BY_LABEL[cand["category"]],
                     "slot": cand["slot"],
                 }
             if row and row["isbn"] in seen:

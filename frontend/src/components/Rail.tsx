@@ -13,8 +13,8 @@ const ITEMS: { view: View; label: string; icon: string }[] = [
   { view: 'library', label: '本棚', icon: 'ph-books' },
   { view: 'notes', label: 'メモ', icon: 'ph-quotes' },
   { view: 'review', label: '振り返り', icon: 'ph-chart-line-up' },
-  // デザインのレールには無い項目（仮置き）。デザインが届いたら位置と見た目を合わせる
-  { view: 'suggestions', label: 'おすすめ', icon: 'ph-lightbulb' },
+  // デザイン J: 本棚 / メモ / 振り返り / おすすめ の順
+  { view: 'suggestions', label: 'おすすめ', icon: 'ph-book-bookmark' },
 ]
 
 export function Rail({

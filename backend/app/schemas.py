@@ -1,7 +1,7 @@
 """APIでやり取りするデータの形（入力チェックもここで行う）"""
 import unicodedata
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
@@ -288,6 +288,10 @@ class SuggestionBase(BaseModel):
     distance: Distance
     # 理由は一言で
     reason: str = Field(min_length=1, max_length=200)
+    # おすすめ一覧（デザイン J）用。分からなければ null
+    genre: Genre | None = None
+    publisher: str | None = Field(default=None, max_length=255)
+    total: int | None = Field(default=None, gt=0)
 
 
 class SuggestionWrite(SuggestionBase):
@@ -304,18 +308,35 @@ class Suggestion(SuggestionBase):
     added_book_id: int | None = None
 
 
-class SuggestionSource(BaseModel):
-    """おすすめ一覧に添える、どの本の候補か（その本を読み終えたときに出す）"""
-    model_config = ConfigDict(from_attributes=True)
+class RecommendationSource(BaseModel):
+    """おすすめ一覧の1冊が、どこから選ばれたか"""
+    # book: 本棚の本を読み終えたときの候補 / topic: キーワードのおすすめ
+    kind: Literal["book", "topic"]
+    # 本なら書名、キーワードならキーワード
+    label: str
+    # 本のときだけ（「本棚で開く」用）
+    book_id: int | None = None
+    reason: str
 
-    id: int
+
+class Recommendation(BaseModel):
+    """おすすめ一覧（デザイン J）の1冊。同じ本の候補は1つにまとめる"""
+    isbn: str
     title: str
     author: str | None = None
+    cover_url: str | None = None
+    # 分からない候補は「その他」
+    genre: Genre
+    publisher: str | None = None
+    total: int | None = None
+    sources: list[RecommendationSource]
 
 
-class SuggestionWithBook(Suggestion):
-    """おすすめ一覧の1件。候補に、紐付いている本を添える"""
-    book: SuggestionSource
+class RecommendationAdd(BaseModel):
+    """おすすめ一覧から積読に足すときに受け取る形"""
+    model_config = ConfigDict(extra="forbid")
+
+    isbn: Isbn
 
 
 class SuggestionSet(BaseModel):
@@ -363,6 +384,10 @@ class TopicSuggestionBase(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
     # 手がかりにした本棚の本。無ければ null
     from_book_id: int | None = None
+    # おすすめ一覧（デザイン J）用。分からなければ null
+    genre: Genre | None = None
+    publisher: str | None = Field(default=None, max_length=255)
+    total: int | None = Field(default=None, gt=0)
 
 
 class TopicSuggestionWrite(TopicSuggestionBase):

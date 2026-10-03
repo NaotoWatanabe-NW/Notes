@@ -14,7 +14,9 @@ import { ReportScreen } from './ReportScreen'
 import { ReviewScreen } from './ReviewScreen'
 import { SearchScreen } from './SearchScreen'
 import { SettingsScreen } from './SettingsScreen'
-import { SuggestionsScreen } from './SuggestionsScreen'
+import { useRecommendations } from '../useRecommendations'
+import { RecommendationSheet } from './RecommendationSheet'
+import { RecommendationsScreen } from './RecommendationsScreen'
 import type { MobileTab } from './TabBar'
 import { TabBar } from './TabBar'
 
@@ -52,6 +54,10 @@ export function MobileApp({ data }: { data: AppData }) {
   const [genreFilter, setGenreFilter] = useState<Genre | null>(null)
   // 本の詳細でタグを押したときだけ入る（7b → 7a）
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  // おすすめ（デザイン J）。タブは増やさず、本棚の帯 → 7h 一覧 → 7i シート
+  const [recsOpen, setRecsOpen] = useState(false)
+  const [recGenre, setRecGenre] = useState<Genre | null>(null)
+  const [recIsbn, setRecIsbn] = useState<string | null>(null)
   const [noteFilter, setNoteFilter] = useState<NoteFilter>(null)
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -60,6 +66,13 @@ export function MobileApp({ data }: { data: AppData }) {
   const [detailEpoch, setDetailEpoch] = useState(0)
 
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? null
+  // 本棚のタブにいる間だけ読む（帯の冊数と 7h・7i で使う）
+  const recs = useRecommendations(tab === 'library', {
+    onAdded: () => void reload(),
+    onNotify: notify,
+    onError: setToast,
+  })
+  const recItem = recs.items.find((item) => item.isbn === recIsbn) ?? null
   const writingBook =
     writingBookId !== null && bookDetail?.id === writingBookId ? bookDetail : null
 
@@ -81,6 +94,8 @@ export function MobileApp({ data }: { data: AppData }) {
     if (book) unhideBook(book)
     setTab('library')
     setShowSettings(false)
+    setRecsOpen(false)
+    setRecIsbn(null)
     setSelectedBookId(id)
   }
 
@@ -145,6 +160,20 @@ export function MobileApp({ data }: { data: AppData }) {
           />
         )
       }
+      if (recsOpen) {
+        return (
+          <RecommendationsScreen
+            items={recs.items}
+            added={recs.added}
+            genre={recGenre}
+            onGenre={setRecGenre}
+            loading={recs.loading}
+            onBack={() => setRecsOpen(false)}
+            onOpen={setRecIsbn}
+            onAdd={(item) => void recs.add(item)}
+          />
+        )
+      }
       return (
         <LibraryScreen
           books={books}
@@ -157,6 +186,9 @@ export function MobileApp({ data }: { data: AppData }) {
           onSelect={setSelectedBookId}
           onSearch={() => setTab('search')}
           onSettings={() => setShowSettings(true)}
+          recs={recs.items.filter((item) => !recs.added.has(item.isbn))}
+          onOpenRecs={() => setRecsOpen(true)}
+          onOpenRec={setRecIsbn}
         />
       )
     }
@@ -187,17 +219,6 @@ export function MobileApp({ data }: { data: AppData }) {
       return <ReviewScreen version={books.length + notes.length} onOpenBook={openBook} />
     }
 
-    if (tab === 'suggestions') {
-      return (
-        <SuggestionsScreen
-          books={books}
-          onOpenBook={openBook}
-          onAdded={() => void reload()}
-          onError={setToast}
-        />
-      )
-    }
-
     return (
       <SearchScreen
         books={books}
@@ -224,7 +245,10 @@ export function MobileApp({ data }: { data: AppData }) {
           setShowSettings(false)
           // 同じタブをもう一度押したら、詳細から一覧へ戻る
           if (next === tab) {
-            if (next === 'library') setSelectedBookId(null)
+            if (next === 'library') {
+              setSelectedBookId(null)
+              setRecsOpen(false)
+            }
             if (next === 'notes') setSelectedNoteId(null)
           }
           setTab(next)
@@ -244,6 +268,20 @@ export function MobileApp({ data }: { data: AppData }) {
             notify('レポートを保存しました')
           }}
           onUpdateBook={(payload) => updateBook(writingBook.id, payload)}
+        />
+      ) : null}
+
+      {recItem ? (
+        <RecommendationSheet
+          item={recItem}
+          addedBookId={recs.added.get(recItem.isbn)}
+          onAdd={() => void recs.add(recItem)}
+          onDismiss={() => {
+            setRecIsbn(null)
+            void recs.dismiss(recItem)
+          }}
+          onOpenBook={openBook}
+          onClose={() => setRecIsbn(null)}
         />
       ) : null}
 

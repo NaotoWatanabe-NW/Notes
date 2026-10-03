@@ -6,7 +6,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
 from .database import Base, add_missing_columns, engine
-from .routers import books, lookup, notes, reviews, settings, suggestions, tags, topics
+from .routers import (
+    books, lookup, notes, recommendations, reviews, settings, suggestions, tags, topics,
+)
 
 # frontend/dist（npm run build の出力）。backend/app/main.py から2つ上が Notes/
 DIST_DIR = (Path(__file__).resolve().parents[2] / "frontend" / "dist").resolve()
@@ -39,6 +41,7 @@ app.include_router(settings.router)
 app.include_router(suggestions.router)
 app.include_router(tags.router)
 app.include_router(topics.router)
+app.include_router(recommendations.router)
 
 
 # ② 最後に登録する ＝ 他のどのルートにも一致しなかったときだけ通る。

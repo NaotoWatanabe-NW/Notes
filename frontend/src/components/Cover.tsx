@@ -4,7 +4,8 @@ type Props = {
   title: string
   author?: string | null
   src?: string | null
-  size?: 'sm' | 'md' | 'lg'
+  /** sm 36×52 / md 72×104 / lg 120×176。row・tile・sheet はモバイルのおすすめ（7h・7a・7i） */
+  size?: 'sm' | 'md' | 'lg' | 'row' | 'tile' | 'sheet'
 }
 
 /**

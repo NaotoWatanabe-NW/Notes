@@ -1,5 +1,5 @@
-import type { Book, BookStatus, Genre } from '../api'
-import { STATUS_LABELS } from '../api'
+import type { Book, BookStatus, Genre, Recommendation } from '../api'
+import { GENRE_LABELS, STATUS_LABELS } from '../api'
 import { Cover } from '../components/Cover'
 import { GenreFilterChips, GenreTag } from '../components/GenreChips'
 import { HashText } from '../components/HashTags'
@@ -20,7 +20,14 @@ type Props = {
   onSelect: (id: number) => void
   onSearch: () => void
   onSettings: () => void
+  /** おすすめ（まだ積読に足していないもの）。いま読んでいるの下に帯で出す（7a） */
+  recs: Recommendation[]
+  onOpenRecs: () => void
+  onOpenRec: (isbn: string) => void
 }
+
+/** 帯に並べる冊数。残りは「すべて見る」で */
+const STRIP_SIZE = 10
 
 /** 「9月26日 · 7冊」 */
 function todayLine(count: number): string {
@@ -47,6 +54,9 @@ export function LibraryScreen({
   onSelect,
   onSearch,
   onSettings,
+  recs,
+  onOpenRecs,
+  onOpenRec,
 }: Props) {
   const reading = books.filter((book) => book.status === 'reading')
   const count = (status: BookStatus) =>
@@ -120,6 +130,32 @@ export function LibraryScreen({
                     </span>
                   ) : null}
                 </span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {recs.length > 0 ? (
+        <>
+          <div className="m-rec-strip-head">
+            <span>おすすめ · {recs.length}冊</span>
+            <button type="button" className="m-link" onClick={onOpenRecs}>
+              すべて見る
+              <i className="ph-duotone ph-caret-right" />
+            </button>
+          </div>
+          <div className="m-bleed m-rec-strip">
+            {recs.slice(0, STRIP_SIZE).map((item) => (
+              <button
+                key={item.isbn}
+                type="button"
+                className="m-rec-tile"
+                onClick={() => onOpenRec(item.isbn)}
+              >
+                <Cover title={item.title} author={item.author} src={item.cover_url} size="tile" />
+                <span className="m-rec-tile-title">{item.title}</span>
+                <span className="m-rec-tile-cat">{GENRE_LABELS[item.genre]}</span>
               </button>
             ))}
           </div>

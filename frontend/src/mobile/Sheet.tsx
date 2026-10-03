@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 
 type Props = {
-  /** half: 画面の52% / tall: 88% / full: 上54pxを残して全面 */
-  size?: 'half' | 'tall' | 'full'
+  /** half: 画面の52% / mid: 64%（おすすめの詳細 7i）/ tall: 88% / full: 上54pxを残して全面 */
+  size?: 'half' | 'mid' | 'tall' | 'full'
   /** 背後をどれだけ暗くするか */
   dim?: 'soft' | 'strong'
   onClose: () => void

@@ -11,9 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
-from ..models import Basis, Book, BookStatus, DismissedBook, Note, Suggestion, TopicSuggestion
+from ..models import (
+    Basis, Book, BookStatus, DismissedBook, Genre, Note, Suggestion, TopicSuggestion,
+)
 from ..schemas import BookDetail, Suggestion as SuggestionRead
-from ..schemas import SuggestionSet, SuggestionSource, SuggestionWithBook, SuggestionWrite
+from ..schemas import SuggestionSet, SuggestionWrite
 
 router = APIRouter(prefix="/api", tags=["suggestions"])
 
@@ -124,29 +126,6 @@ def get_suggestions(
     )
 
 
-@router.get("/suggestions", response_model=list[SuggestionWithBook])
-def list_all_suggestions(db: Session = Depends(get_db)):
-    """設定してある「次に読む本」を全部、どの本の候補かを添えて返す（おすすめ一覧用）。
-
-    本ごとに、設定した順で並べる。「興味なし」にした本は外す。
-    本ごとに取ると100回以上の往復になるので、まとめて1回で返す。
-    """
-    dismissed = set(db.scalars(select(DismissedBook.isbn)).all())
-    rows = db.execute(
-        select(Suggestion, Book)
-        .join(Book, Suggestion.book_id == Book.id)
-        .order_by(Book.id, Suggestion.position, Suggestion.id)
-    ).all()
-    return [
-        SuggestionWithBook(
-            **SuggestionRead.model_validate(suggestion).model_dump(),
-            book=SuggestionSource.model_validate(book),
-        )
-        for suggestion, book in rows
-        if not (suggestion.isbn and suggestion.isbn in dismissed)
-    ]
-
-
 @router.put(
     "/books/{book_id}/suggestions", response_model=list[SuggestionRead], status_code=200
 )
@@ -195,7 +174,8 @@ def add_to_shelf(suggestion_id: int, db: Session = Depends(get_db)):
 def shelve(db: Session, suggestion: Suggestion | TopicSuggestion) -> Book:
     """候補を積読として本棚に入れ、候補に追加済みの印を付ける。
 
-    「次に読む本」とキーワードのおすすめで共通。
+    「次に読む本」・キーワードのおすすめ・おすすめ一覧で共通。
+    候補にカテゴリ・出版社・ページ数があれば、本にも引き継ぐ。
     """
     # すでに同じ ISBN の本があれば、それを使い回す（二重登録を防ぐ）
     existing = None
@@ -206,6 +186,9 @@ def shelve(db: Session, suggestion: Suggestion | TopicSuggestion) -> Book:
         isbn=suggestion.isbn,
         title=suggestion.title,
         author=suggestion.author,
+        publisher=suggestion.publisher,
+        total=suggestion.total,
+        genre=suggestion.genre or Genre.OTHER,
         cover_url=suggestion.cover_url,
         status=BookStatus.UNREAD,
     )

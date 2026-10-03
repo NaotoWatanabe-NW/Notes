@@ -233,6 +233,21 @@ button {
   width: 72px;
   height: 104px;
 }
+/* モバイルのおすすめ（7h の行・7a の帯・7i のシート） */
+.cover-row {
+  width: 52px;
+  height: 76px;
+}
+.cover-tile {
+  width: 84px;
+  height: 122px;
+}
+.cover-sheet {
+  width: 88px;
+  height: 128px;
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-md);
+}
 .cover-lg {
   width: 120px;
   height: 176px;
@@ -1408,4 +1423,95 @@ button {
 }
 .suggestion-group {
   gap: 16px;
+}
+
+/* ───────────────────────────── おすすめ（デザイン J） */
+.rec-pane-desc {
+  margin: 0;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-neutral-700);
+}
+.rec-empty {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+.row-meta.rec-added {
+  color: var(--color-accent-700);
+}
+.rec-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.rec-detail-head {
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+}
+.rec-detail-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.rec-detail-title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-wrap: pretty;
+}
+.rec-detail-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+.rec-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+}
+.rec-reason-label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--color-accent-700);
+}
+.rec-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* どの本・キーワードから選ばれたか */
+.rec-reason-source {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.rec-reason-text {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+.rec-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.rec-dismiss {
+  color: var(--color-neutral-700);
+}
+.rec-added-tag {
+  gap: 4px;
+}
+.rec-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-neutral-700);
 }

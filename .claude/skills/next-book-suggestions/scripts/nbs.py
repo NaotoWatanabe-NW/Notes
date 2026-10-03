@@ -22,6 +22,11 @@ from pathlib import Path
 DEFAULT_API = "http://127.0.0.1:8765"
 DEFAULT_DB = "backend/reading.db"
 DISTANCES = ("near", "far")
+# 候補のカテゴリ。エージェントは画面と同じ日本語で書き、ここで API の値に直す
+GENRE_BY_LABEL = {
+    "小説": "novel", "ビジネス・実用": "business", "エッセイ": "essay",
+    "学術": "academic", "雑誌": "magazine", "その他": "other",
+}
 
 
 # ---------------------------------------------------------------- HTTP
@@ -400,6 +405,8 @@ def _check_shape(cand: dict) -> str | None:
     reason = (cand.get("reason") or "").strip()
     if not reason or len(reason) > 200:
         return f"reason が空か200字超（{len(reason)}字）"
+    if cand.get("category") not in GENRE_BY_LABEL:
+        return f"category が不正: {cand.get('category')}"
     return None
 
 
@@ -416,7 +423,7 @@ def verify_candidate(api: str, cand: dict, exclude: dict, use_search: bool = Tru
     if book is None:
         return state, None, note
     row = {**book, "basis": cand["basis"], "distance": cand["distance"],
-           "reason": cand["reason"].strip()}
+           "reason": cand["reason"].strip(), "genre": GENRE_BY_LABEL[cand["category"]]}
     return state, row, note
 
 
@@ -424,7 +431,7 @@ def resolve_book(api: str, cand: dict, exclude: dict, use_search: bool = True,
                  accept: frozenset = frozenset()):
     """候補の本が実在し、本棚にも「興味なし」にも無いかを確かめる。
 
-    (状態, {title, author, isbn, cover_url} or None, 一言) を返す。状態は
+    (状態, {title, author, isbn, cover_url, publisher, total} or None, 一言) を返す。状態は
     ok / warn / mismatch / unverified / excluded。キーワードのおすすめ（keyword-suggestions）も使う
     """
     how, info, detail = _identify(api, cand, use_search, accept)
@@ -450,6 +457,9 @@ def resolve_book(api: str, cand: dict, exclude: dict, use_search: bool = True,
         "author": author,
         "isbn": info["isbn"],
         "cover_url": info.get("cover_url"),
+        # おすすめ一覧の詳細に出す（「著者 · 出版社 · nページ」）
+        "publisher": info.get("publisher"),
+        "total": info.get("total"),
     }
     notes = []
     if how == "search" and info["isbn"] != normalize_isbn(cand.get("isbn")):
@@ -525,7 +535,8 @@ def cmd_verify(args) -> int:
 
 # ---------------------------------------------------------------- apply
 
-_KEEP = ("title", "author", "isbn", "cover_url", "basis", "distance", "reason")
+_KEEP = ("title", "author", "isbn", "cover_url", "basis", "distance", "reason",
+         "genre", "publisher", "total")
 
 
 def merge_for_fill(existing: list[dict], rows: list[dict], quota: dict) -> tuple[list[dict], int]:
@@ -534,7 +545,8 @@ def merge_for_fill(existing: list[dict], rows: list[dict], quota: dict) -> tuple
     同じ verified.json を2回 apply しても候補が倍にならないよう、既存と同じ ISBN は足さず、
     距離ごとの上限（quota）を超える分も足さない。
     """
-    payload = [{k: s[k] for k in _KEEP} for s in existing]
+    # 列を足す前の候補は genre などを持たないので get で取る
+    payload = [{k: s.get(k) for k in _KEEP} for s in existing]
     have_isbns = {s["isbn"] for s in payload if s.get("isbn")}
     count = {d: sum(1 for s in payload if s["distance"] == d) for d in DISTANCES}
     added = 0
