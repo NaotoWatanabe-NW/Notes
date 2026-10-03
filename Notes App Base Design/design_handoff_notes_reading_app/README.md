@@ -164,9 +164,10 @@ Webは3ペイン（アイコンレール／一覧／詳細）＋ ⌘K コマン�
 
 ### J. おすすめ（レールに追加）
 - レールの4つ目: 「おすすめ」`ph-book-bookmark`。順番は 本棚 / メモ / 振り返り / おすすめ。
-- データ: アプリが持っているおすすめ本のリスト `Recommendation { id, title, author, publisher, pages, category, reason }`。**本棚にある本（書名で一致）と「興味なし」にした本は表示しない**。この画面で追加した本は「積読に追加済み」として、そのまま一覧に残す。
+- データ: アプリが持っているおすすめ本のリスト `Recommendation { id, title, author, publisher, pages, category, reason, from?: { bookId, via }[] }`。**本棚にある本（書名で一致）と「興味なし」にした本は表示しない**。この画面で追加した本は「積読に追加済み」として、そのまま一覧に残す。
 - 一覧ペイン: 「おすすめ」＋ 冊数、説明「Notes が選んだ本のリストです。本棚にある本は表示しません。」、カテゴリのチップ、行（表紙 36×52 ＋ 書名 ＋ `著者 · カテゴリ`。追加済みの行は `--color-accent-700` で「積読に追加済み」）。
 - 詳細ペイン: 表紙 120×176 ＋ カテゴリ（`.tag-neutral`）＋ 書名 32px ＋ `著者 · 出版社 · nページ` → 「おすすめの理由」（12px `--color-accent-700`）＋ 理由 18px/lh1.8 → [積読に追加（primary）] [興味なし（ghost）]。追加後は「✓ 積読に追加しました」＋ [本棚で開く]。注記「「興味なし」にした本は、このリストに表示しません。」
+- **元になった本へのリンク**: おすすめが本棚の本から派生している場合（`Recommendation.from: [{ bookId, via }]`）、理由の下に「本棚のこの本から」を出す。行 = 表紙 30×44 ＋ 書名 15px/600 ＋ `状態 · 根拠` 11px（例「読了 · ★5をつけた小説」）＋ 右に「本を開く →」`--color-accent-700`。hover `--color-accent-100`、クリックで本棚のその本を開く（絞り込みは解除）。複数あれば縦に並べる。元の本が本棚から消えていれば表示しない。派生でないおすすめには何も出さない。
 - 読了したときの提案（G / 5a）とは別の機能。こちらはいつでも見られる固定のリスト。
 
 ### F. トースト
@@ -227,7 +228,7 @@ Webは3ペイン（アイコンレール／一覧／詳細）＋ ⌘K コマン�
 ### 7a のおすすめ・7h おすすめ一覧・7i おすすめの詳細
 - タブは増やさない。7a の「いま読んでいる」の下に「おすすめ · n冊」と「すべて見る ›」、表紙 84×122 の横スクロール（書名 12px/600 ＋ カテゴリ 10px）。
 - 7h（「すべて見る」から開く）: ‹ 本棚 ／「本棚にない本 · n冊」＋「おすすめ」34px ／ カテゴリのチップ（横スクロール）／ 行: 表紙 52×76 ＋ 書名 16px/600 ＋ `[カテゴリ] 著者` ＋ 理由 13px ＋ 右に + ボタン（44×44、secondary）。追加済みは ✓（`--color-accent-100` 地）。
-- 7i（行をタップ）: 高さ 64% のシート。表紙 88×128 ＋ カテゴリ ＋ 書名 22px ＋ メタ → おすすめの理由 16px/lh1.8 → [積読に追加（primary、残りの幅）] [興味なし（ghost）]、注記 11px。下にスワイプで閉じる。
+- 7i（行をタップ）: 高さ 76% のシート。理由の下に「本棚のこの本から」の行（44px 以上、`--color-surface`、タップで 7b へ）。表紙 88×128 ＋ カテゴリ ＋ 書名 22px ＋ メタ → おすすめの理由 16px/lh1.8 → [積読に追加（primary、残りの幅）] [興味なし（ghost）]、注記 11px。下にスワイプで閉じる。
 
 ### 7g 読了 → 次に読む本（5a のモバイル版）
 - 読了にしたときに一度だけ出す、ほぼ全画面のシート（上 54px は背後の画面が暗く見える、radius 14px 14px 0 0）。
@@ -253,7 +254,7 @@ Webは3ペイン（アイコンレール／一覧／詳細）＋ ⌘K コマン�
 ```
 Book { id, title, author, publisher, category: '小説'|'ビジネス・実用'|'エッセイ'|'学術'|'雑誌'|'その他', tags: string[], status: 'reading'|'done'|'tsundoku', page, total, rating(0-5), startedAt, coverUrl?, recommend: 'strong'|'some'|'self', reportHtml }
 Note { id, bookId, kind: 'quote'|'memo', page, text, memo?, createdAt }
-Recommendation { id, title, author, publisher, pages, category, reason }   // アプリが持っているリスト
+Recommendation { id, title, author, publisher, pages, category, reason, from?: { bookId, via }[] }   // アプリが持っているリスト
 UI   { view: 'library'|'notes'|'review'|'settings'|'recs', libraryFilter, categoryFilter, tagFilter, recCategory, selectedRecId, dismissedRecIds, selectedBookId, noteFilter, selectedNoteId,
        palette: { open, query }, inlineEdit: 'none'|'note'|'progress', draft{kind,page,text,memo},
        writing: { open, bookId }, memoWindow: { open, minimized, x, y, filter },

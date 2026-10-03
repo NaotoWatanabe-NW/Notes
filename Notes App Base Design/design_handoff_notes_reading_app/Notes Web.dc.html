@@ -220,6 +220,14 @@
 <span style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">おすすめの理由</span>
 <p style="margin:0;font-size:18px;line-height:1.8;text-wrap:pretty">{{ rec.reason }}</p>
 </div>
+<sc-if value="{{ rec.hasFrom }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;gap:6px;max-width:560px">
+<span style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">本棚のこの本から</span>
+<sc-for list="{{ rec.from }}" as="f" hint-placeholder-count="1">
+<div onClick="{{ f.onClick }}" style="display:flex;gap:12px;align-items:center;padding:8px;margin:0 -8px;border-radius:2px;cursor:pointer" style-hover="background:var(--color-accent-100)"><div style="width:30px;height:44px;flex:none;border-radius:1px;box-shadow:var(--shadow-sm);background:{{ f.cbg }}"></div><div style="display:grid;gap:2px;min-width:0"><span style="font-size:15px;font-weight:600">{{ f.t }}</span><span style="font-size:11px;color:var(--color-neutral-700)">{{ f.via }}</span></div><span style="margin-left:auto;font-size:13px;color:var(--color-accent-700);display:flex;align-items:center;gap:4px">本を開く<i class="ph-duotone ph-arrow-right"></i></span></div>
+</sc-for>
+</div>
+</sc-if>
 <sc-if value="{{ rec.notAdded }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:10px"><button class="btn btn-primary" onClick="{{ rec.onAdd }}"><i class="ph-duotone ph-plus" style="font-size:17px"></i>積読に追加</button><button class="btn btn-ghost" onClick="{{ rec.onDismiss }}" style="color:var(--color-neutral-700)">興味なし</button></div></sc-if>
 <sc-if value="{{ rec.added }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;align-items:center"><span class="tag tag-accent" style="display:flex;gap:4px;align-items:center"><i class="ph-duotone ph-check"></i>積読に追加しました</span><button class="btn btn-secondary" onClick="{{ rec.onOpen }}">本棚で開く</button></div></sc-if>
 <p style="margin:0;font-size:12px;color:var(--color-neutral-700)">「興味なし」にした本は、このリストに表示しません。</p>
@@ -355,17 +363,17 @@ class Component extends DCLogic {
     { t: 'FACTFULNESS', a: 'ハンス・ロスリング', pub: '日経BP · 2019', pages: 400 }
   ];
   RECS = [
-    { id: 'r1', t: '博士の愛した数式', a: '小川洋子', pub: '新潮文庫', pages: 291, cat: '小説', reason: '数式を通して、人と人の距離を描く物語。静かな文章で、間を置きながら読みたい一冊。' },
-    { id: 'r2', t: 'ソラリス', a: 'スタニスワフ・レム', pub: 'ハヤカワ文庫SF', pages: 496, cat: '小説', reason: '理解できない相手とどう向き合うかを考えさせる、SFの古典。' },
+    { id: 'r1', from: [{ id: 'b4', via: '★5をつけた小説' }], t: '博士の愛した数式', a: '小川洋子', pub: '新潮文庫', pages: 291, cat: '小説', reason: '数式を通して、人と人の距離を描く物語。静かな文章で、間を置きながら読みたい一冊。' },
+    { id: 'r2', from: [{ id: 'b5', via: '★5をつけたSF' }], t: 'ソラリス', a: 'スタニスワフ・レム', pub: 'ハヤカワ文庫SF', pages: 496, cat: '小説', reason: '理解できない相手とどう向き合うかを考えさせる、SFの古典。' },
     { id: 'r3', t: 'ノルウェイの森', a: '村上春樹', pub: '講談社文庫', pages: 608, cat: '小説', reason: '喪失と回復を、ひとりの学生の数年間として描いた長編。' },
     { id: 'r4', t: 'イシューからはじめよ', a: '安宅和人', pub: '英治出版', pages: 248, cat: 'ビジネス・実用', reason: '何に取り組むかを先に決める。考える手順をまとめた本。' },
     { id: 'r5', t: '思考の整理学', a: '外山滋比古', pub: 'ちくま文庫', pages: 223, cat: 'ビジネス・実用', reason: 'アイデアを寝かせる、忘れる。考えを育てる習慣について書かれた本。' },
-    { id: 'r6', t: '旅をする木', a: '星野道夫', pub: '文春文庫', pages: 252, cat: 'エッセイ', reason: 'アラスカで暮らした写真家が、自然と時間について綴った随筆集。' },
+    { id: 'r6', from: [{ id: 'b3', via: '同じカテゴリ · #自然' }], t: '旅をする木', a: '星野道夫', pub: '文春文庫', pages: 252, cat: 'エッセイ', reason: 'アラスカで暮らした写真家が、自然と時間について綴った随筆集。' },
     { id: 'r7', t: '考えるヒント', a: '小林秀雄', pub: '文春文庫', pages: 288, cat: 'エッセイ', reason: '常識や言葉を一つずつ取り上げて考え直す、短い文章の集まり。' },
-    { id: 'r8', t: '勉強の哲学', a: '千葉雅也', pub: '文春文庫', pages: 264, cat: '学術', reason: '勉強とは自分を変えることだ、という視点から学び方を考える。' },
-    { id: 'r9', t: 'ゾウの時間 ネズミの時間', a: '本川達雄', pub: '中公新書', pages: 230, cat: '学術', reason: '体の大きさによって時間の感じ方が変わる。生物学の入門書。' },
+    { id: 'r8', from: [{ id: 'b1', via: '#哲学 · 引用 6件' }, { id: 'b8', via: '#哲学' }], t: '勉強の哲学', a: '千葉雅也', pub: '文春文庫', pages: 264, cat: '学術', reason: '勉強とは自分を変えることだ、という視点から学び方を考える。' },
+    { id: 'r9', from: [{ id: 'b10', via: '同じカテゴリ · #生物' }], t: 'ゾウの時間 ネズミの時間', a: '本川達雄', pub: '中公新書', pages: 230, cat: '学術', reason: '体の大きさによって時間の感じ方が変わる。生物学の入門書。' },
     { id: 'r10', t: '暮しの手帖', a: '暮しの手帖社', pub: '隔月刊', pages: 200, cat: '雑誌', reason: '料理や住まいの記事を、実際に試した結果とともに載せる生活誌。' },
-    { id: 'r11', t: '夜と霧', a: 'V・E・フランクル', pub: 'みすず書房', pages: 169, cat: 'その他', reason: '強制収容所での体験から、生きる意味を問い直した記録。' }
+    { id: 'r11', from: [{ id: 'b1', via: '引用 p.182「生活を取り戻す」' }], t: '夜と霧', a: 'V・E・フランクル', pub: 'みすず書房', pages: 169, cat: 'その他', reason: '強制収容所での体験から、生きる意味を問い直した記録。' }
   ];
   state = {
     tagFilter: null, tagEdit: false, tagDraft: '', catFilter: 'all', recCat: 'all', selRec: null, recDis: [], recAdded: [], catEdit: false,
@@ -547,7 +555,8 @@ class Component extends DCLogic {
     const rcv = r => this.COV[(this.RECS.indexOf(r) + 2) % this.COV.length];
     const recList = recVis.map(r => { const ad = s.recAdded.includes(r.id); return { t: r.t, meta: ad ? '積読に追加済み' : `${r.a} · ${r.cat}`, mc: ad ? 'var(--color-accent-700)' : 'var(--color-neutral-700)', cbg: rcv(r)[0], bg: r.id === selRecId ? 'var(--color-accent-100)' : 'transparent', onClick: () => set({ selRec: r.id }) }; });
     const sr = recVis.find(r => r.id === selRecId);
-    const recItem = sr ? { ...sr, cbg: rcv(sr)[0], cfg: rcv(sr)[1], added: s.recAdded.includes(sr.id), notAdded: !s.recAdded.includes(sr.id), metaLine: `${sr.a} · ${sr.pub} · ${sr.pages}ページ`,
+    const recFrom = sr ? (sr.from || []).map(f => { const b = books.find(x => x.id === f.id); return b ? { t: b.t, via: `${stLabel[b.status]} · ${f.via}`, cbg: cov(b)[0], onClick: () => set({ view: 'library', selBook: b.id, filter: b.status, catFilter: 'all', tagFilter: null }) } : null; }).filter(Boolean) : [];
+    const recItem = sr ? { ...sr, from: recFrom, hasFrom: recFrom.length > 0, cbg: rcv(sr)[0], cfg: rcv(sr)[1], added: s.recAdded.includes(sr.id), notAdded: !s.recAdded.includes(sr.id), metaLine: `${sr.a} · ${sr.pub} · ${sr.pages}ページ`,
       onAdd: () => { const id = 'b' + Date.now(); this.setState(st => ({ books: [...st.books, { id, t: sr.t, a: sr.a, pub: sr.pub, cat: sr.cat, status: 'tsundoku', page: 0, total: sr.pages, rating: 0, start: '', c: st.books.length, notes: [] }], recAdded: [...st.recAdded, sr.id] })); this.toast(`「${sr.t}」を積読に追加しました`); },
       onDismiss: () => { set({ recDis: [...s.recDis, sr.id] }); this.toast(`「${sr.t}」をおすすめから外しました`); },
       onOpen: () => { const b = books.find(x => x.t === sr.t); if (b) set({ view: 'library', selBook: b.id, filter: b.status, catFilter: 'all' }); } } : {};

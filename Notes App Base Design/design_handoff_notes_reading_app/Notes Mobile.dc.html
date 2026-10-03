@@ -242,13 +242,14 @@
 </div>
 <div style="flex:none;display:flex;justify-content:space-around;padding:8px 0 28px;background:var(--color-bg);box-shadow:0 -1px 8px color-mix(in srgb,#2d2b2b 8%,transparent)"><sc-for list="{{ tabsLib }}" as="t" hint-placeholder-count="4"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;min-width:64px;padding-top:4px;color:{{ t.fg }}"><i class="{{ t.icon }}" style="font-size:24px"></i>{{ t.label }}</div></sc-for></div>
 <div style="position:absolute;inset:0;background:color-mix(in srgb,var(--color-neutral-900) 30%,transparent)"></div>
-<div style="position:absolute;left:0;right:0;bottom:0;height:64%;background:var(--color-bg);border-radius:14px 14px 0 0;box-shadow:var(--shadow-lg);padding:10px 22px 30px;display:grid;grid-auto-rows:max-content;gap:20px">
+<div style="position:absolute;left:0;right:0;bottom:0;height:76%;background:var(--color-bg);border-radius:14px 14px 0 0;box-shadow:var(--shadow-lg);padding:10px 22px 30px;display:grid;grid-auto-rows:max-content;gap:20px">
 <div style="width:36px;height:5px;border-radius:3px;background:var(--color-neutral-400);justify-self:center"></div>
 <div style="display:flex;gap:18px;align-items:flex-end">
 <div style="width:88px;height:128px;flex:none;border-radius:2px;box-shadow:var(--shadow-md);padding:9px;display:flex;flex-direction:column;justify-content:space-between;background:{{ recSel.cbg }};color:{{ recSel.cfg }}"><span style="font-size:11px;font-weight:600;line-height:1.3">{{ recSel.t }}</span><span style="font-size:8px">{{ recSel.a }}</span></div>
 <div style="display:grid;gap:6px;min-width:0"><span class="tag tag-neutral" style="justify-self:start">{{ recSel.cat }}</span><span style="font-size:22px;font-weight:600;line-height:1.3">{{ recSel.t }}</span><span style="font-size:12px;color:var(--color-neutral-700)">{{ recSel.meta }}</span></div>
 </div>
 <div style="display:grid;gap:6px"><span style="font-size:12px;letter-spacing:0.06em;color:var(--color-accent-700)">おすすめの理由</span><span style="font-size:16px;line-height:1.8">{{ recSel.reason }}</span></div>
+<div style="display:grid;gap:4px"><span style="font-size:12px;letter-spacing:0.06em;color:var(--color-neutral-700)">本棚のこの本から</span><div style="display:flex;gap:12px;align-items:center;min-height:44px;padding:6px 8px;margin:0 -8px;border-radius:2px;background:var(--color-surface)"><div style="width:28px;height:40px;flex:none;border-radius:1px;box-shadow:var(--shadow-sm);background:var(--color-neutral-300)"></div><div style="flex:1;display:grid;gap:1px"><span style="font-size:14px;font-weight:600">こころ</span><span style="font-size:11px;color:var(--color-neutral-700)">読了 · ★5をつけた小説</span></div><i class="ph-duotone ph-caret-right" style="color:var(--color-accent-700)"></i></div></div>
 <div style="display:grid;grid-template-columns:1fr auto;gap:10px"><button class="btn btn-primary" style="min-height:44px"><i class="ph-duotone ph-plus" style="font-size:17px"></i>積読に追加</button><button class="btn btn-ghost" style="min-height:44px;color:var(--color-neutral-700)">興味なし</button></div>
 <span style="font-size:11px;color:var(--color-neutral-700)">「興味なし」にした本は、このリストに表示しません。</span>
 </div>
