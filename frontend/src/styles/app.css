@@ -233,6 +233,11 @@ button {
   width: 72px;
   height: 104px;
 }
+/* 「本棚のこの本から」の行 */
+.cover-xs {
+  width: 30px;
+  height: 44px;
+}
 /* モバイルのおすすめ（7h の行・7a の帯・7i のシート） */
 .cover-row {
   width: 52px;
@@ -1514,4 +1519,55 @@ button {
   margin: 0;
   font-size: 12px;
   color: var(--color-neutral-700);
+}
+
+/* 「本棚のこの本から」（元になった本へのリンク） */
+.rec-from {
+  display: grid;
+  gap: 6px;
+  max-width: 560px;
+}
+.rec-from-label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--color-neutral-700);
+}
+.rec-from-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  margin: 0 -8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rec-from-row:hover {
+  background: var(--color-accent-100);
+}
+.rec-from-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rec-from-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.rec-from-via {
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+.rec-from-go {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--color-accent-700);
 }

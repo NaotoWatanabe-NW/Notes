@@ -34,14 +34,18 @@ def list_recommendations(db: Session = Depends(get_db)):
 
     # 本ごとの候補（本の id 順・設定した順）→ キーワードの候補（新しいキーワード順）
     rows = [
-        (row, RecommendationSource(kind="book", label=book.title, book_id=book.id, reason=row.reason))
+        (row, RecommendationSource(
+            kind="book", label=book.title, book_id=book.id, basis=row.basis, reason=row.reason,
+        ))
         for row, book in db.execute(
             select(Suggestion, Book)
             .join(Book, Suggestion.book_id == Book.id)
             .order_by(Book.id, Suggestion.position, Suggestion.id)
         ).all()
     ] + [
-        (row, RecommendationSource(kind="topic", label=topic.keyword, reason=row.reason))
+        (row, RecommendationSource(
+            kind="topic", label=topic.keyword, book_id=row.from_book_id, reason=row.reason,
+        ))
         for row, topic in db.execute(
             select(TopicSuggestion, Topic)
             .join(Topic, TopicSuggestion.topic_id == Topic.id)

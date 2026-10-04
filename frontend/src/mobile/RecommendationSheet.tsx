@@ -1,7 +1,7 @@
-import type { Recommendation } from '../api'
+import type { Book, Recommendation } from '../api'
 import { GENRE_LABELS } from '../api'
 import { Cover } from '../components/Cover'
-import { metaLine, sourceLabel } from '../recommendations'
+import { fromBooks, metaLine, sourceLabel } from '../recommendations'
 import { Sheet } from './Sheet'
 
 type Props = {
@@ -9,11 +9,14 @@ type Props = {
   addedBookId: number | undefined
   onAdd: () => void
   onDismiss: () => void
+  /** 積読に足した本・元の本を開く（7b へ） */
   onOpenBook: (id: number) => void
   onClose: () => void
+  /** 本棚の本（「本棚のこの本から」を出すため） */
+  books: Book[]
 }
 
-/** 7i おすすめの詳細。行を押すと下から出る（高さ 64%） */
+/** 7i おすすめの詳細。行を押すと下から出る（高さ 76%） */
 export function RecommendationSheet({
   item,
   addedBookId,
@@ -21,7 +24,10 @@ export function RecommendationSheet({
   onDismiss,
   onOpenBook,
   onClose,
+  books,
 }: Props) {
+  const from = fromBooks(item, books)
+  const labelled = item.sources.length > 1
   return (
     <Sheet size="mid" dim="strong" onClose={onClose}>
       <div className="m-sheet-body m-rec-sheet">
@@ -38,11 +44,32 @@ export function RecommendationSheet({
           <span className="rec-reason-label">おすすめの理由</span>
           {item.sources.map((source, index) => (
             <div key={index} className="rec-reason">
-              <span className="rec-reason-source">{sourceLabel(source)}</span>
+              {labelled ? <span className="rec-reason-source">{sourceLabel(source)}</span> : null}
               <p className="m-rec-sheet-reason">{source.reason}</p>
             </div>
           ))}
         </div>
+
+        {from.length > 0 ? (
+          <div className="m-rec-from">
+            <span className="rec-from-label">本棚のこの本から</span>
+            {from.map(({ book, via }) => (
+              <button
+                key={book.id}
+                type="button"
+                className="m-rec-from-row"
+                onClick={() => onOpenBook(book.id)}
+              >
+                <Cover title={book.title} author={book.author} src={book.cover_url} size="xs" />
+                <span className="rec-from-main">
+                  <span className="m-rec-from-title">{book.title}</span>
+                  <span className="rec-from-via">{via}</span>
+                </span>
+                <i className="ph-duotone ph-caret-right m-rec-from-go" />
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {addedBookId === undefined ? (
           <div className="m-rec-sheet-actions">

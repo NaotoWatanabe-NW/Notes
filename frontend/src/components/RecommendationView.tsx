@@ -1,6 +1,6 @@
-import type { Recommendation } from '../api'
+import type { Book, Recommendation } from '../api'
 import { GENRE_LABELS } from '../api'
-import { metaLine, sourceLabel } from '../recommendations'
+import { fromBooks, metaLine, sourceLabel } from '../recommendations'
 import { Cover } from './Cover'
 
 type Props = {
@@ -10,11 +10,26 @@ type Props = {
   onAdd: () => void
   onDismiss: () => void
   onOpenBook: (id: number) => void
+  /** 本棚の本（「本棚のこの本から」を出すため） */
+  books: Book[]
+  /** 元の本を開く（絞り込みは解除する） */
+  onOpenSource: (id: number) => void
 }
 
 /** おすすめの詳細ペイン（デザイン J） */
-export function RecommendationView({ item, addedBookId, onAdd, onDismiss, onOpenBook }: Props) {
+export function RecommendationView({
+  item,
+  addedBookId,
+  onAdd,
+  onDismiss,
+  onOpenBook,
+  books,
+  onOpenSource,
+}: Props) {
   if (!item) return <p className="detail-empty">表示できるおすすめはありません。</p>
+  const from = fromBooks(item, books)
+  // 理由が1つならデザインどおり理由だけ。何冊もの本から選ばれたときは、どの理由がどこからかを添える
+  const labelled = item.sources.length > 1
 
   return (
     <div className="detail rec-detail">
@@ -27,16 +42,40 @@ export function RecommendationView({ item, addedBookId, onAdd, onDismiss, onOpen
         </div>
       </header>
 
-      {/* 何冊もの本から選ばれた本は、理由も選ばれた元ごとに並べる */}
       <section className="rec-reasons">
         <span className="rec-reason-label">おすすめの理由</span>
         {item.sources.map((source, index) => (
           <div key={index} className="rec-reason">
-            <span className="rec-reason-source">{sourceLabel(source)}</span>
+            {labelled ? <span className="rec-reason-source">{sourceLabel(source)}</span> : null}
             <p className="rec-reason-text">{source.reason}</p>
           </div>
         ))}
       </section>
+
+      {/* 元になった本棚の本へのリンク。派生でないおすすめには出さない */}
+      {from.length > 0 ? (
+        <section className="rec-from">
+          <span className="rec-from-label">本棚のこの本から</span>
+          {from.map(({ book, via }) => (
+            <button
+              key={book.id}
+              type="button"
+              className="rec-from-row"
+              onClick={() => onOpenSource(book.id)}
+            >
+              <Cover title={book.title} author={book.author} src={book.cover_url} size="xs" />
+              <span className="rec-from-main">
+                <span className="rec-from-title">{book.title}</span>
+                <span className="rec-from-via">{via}</span>
+              </span>
+              <span className="rec-from-go">
+                本を開く
+                <i className="ph-duotone ph-arrow-right" />
+              </span>
+            </button>
+          ))}
+        </section>
+      ) : null}
 
       {addedBookId === undefined ? (
         <div className="rec-actions">

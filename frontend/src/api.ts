@@ -410,7 +410,10 @@ export type RecommendationSource = {
   kind: 'book' | 'topic'
   /** 本なら書名、キーワードならキーワード */
   label: string
+  /** 元になった本棚の本（本の候補はその本、キーワードの候補は手がかりにした本） */
   book_id: number | null
+  /** 本の候補のときだけ。なぜ選んだか */
+  basis: Basis | null
   reason: string
 }
 

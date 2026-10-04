@@ -314,8 +314,11 @@ class RecommendationSource(BaseModel):
     kind: Literal["book", "topic"]
     # 本なら書名、キーワードならキーワード
     label: str
-    # 本のときだけ（「本棚で開く」用）
+    # 元になった本棚の本（「本棚のこの本から」に出す）。本の候補はその本、
+    # キーワードの候補は手がかりにした本（from_book_id）。無ければ null
     book_id: int | None = None
+    # 本の候補のときだけ。なぜ選んだか（引用・メモ / 評価 / 分野）
+    basis: Basis | None = None
     reason: str
 
 

@@ -49,11 +49,29 @@ def test_本の候補とキーワードの候補を1つの一覧にまとめる(
 
     assert [item["title"] for item in body] == ["数の発明", "ゲーム理論入門の入門"]
     assert body[0]["sources"] == [
-        {"kind": "book", "label": "ピダハン", "book_id": source["id"], "reason": "数の話へ"}
+        {"kind": "book", "label": "ピダハン", "book_id": source["id"], "basis": "tag",
+         "reason": "数の話へ"}
     ]
     assert body[1]["sources"] == [
-        {"kind": "topic", "label": "ゲーム理論", "book_id": None, "reason": "入門"}
+        {"kind": "topic", "label": "ゲーム理論", "book_id": None, "basis": None, "reason": "入門"}
     ]
+
+
+def test_キーワードの候補は手がかりにした本棚の本を元として返す(client):
+    # デザイン J の「本棚のこの本から」に出す
+    owned = _book(client, "ゲーム理論の思考法")
+    _set_topic(client, "ゲーム理論", [_candidate(from_book_id=owned["id"])])
+
+    source = _list(client)[0]["sources"][0]
+
+    assert (source["kind"], source["label"], source["book_id"]) == ("topic", "ゲーム理論", owned["id"])
+
+
+def test_本の候補はなぜ選んだかを返す(client):
+    source = _book(client, "A")
+    _set_book(client, source["id"], [_candidate(basis="rating")])
+
+    assert _list(client)[0]["sources"][0]["basis"] == "rating"
 
 
 def test_同じ本は1つにまとめ選ばれた元と理由を全部添える(client):

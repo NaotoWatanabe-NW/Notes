@@ -365,6 +365,16 @@ export function DesktopShell({ data }: { data: AppData }) {
           onAdd={() => selectedRec && void recs.add(selectedRec)}
           onDismiss={() => selectedRec && void recs.dismiss(selectedRec)}
           onOpenBook={openBookById}
+          books={books}
+          onOpenSource={(id) => {
+            // 元の本を本棚で開く。絞り込みは解除する（デザイン J）
+            setLibraryFilter(null)
+            setTagFilter(null)
+            setGenreFilter(null)
+            setView('library')
+            setAdding(false)
+            setSelectedBookId(id)
+          }}
         />
       )
     }

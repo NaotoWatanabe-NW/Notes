@@ -706,7 +706,7 @@
 
 /* ── おすすめ（7a の帯・7h 一覧・7i シート、デザイン J） ───────── */
 .m-sheet-mid {
-  height: 64%;
+  height: 76%;
 }
 .m-link {
   display: inline-flex;
@@ -868,4 +868,36 @@
 .m-rec-note {
   font-size: 11px;
   color: var(--color-neutral-700);
+}
+/* 7i「本棚のこの本から」。押すと 7b へ */
+.m-rec-from {
+  display: grid;
+  gap: 4px;
+}
+.m-rec-from-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.m-rec-from-row .cover-xs {
+  width: 28px;
+  height: 40px;
+}
+.m-rec-from-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.m-rec-from-go {
+  margin-left: auto;
+  color: var(--color-accent-700);
 }

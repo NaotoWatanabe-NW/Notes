@@ -42,3 +42,21 @@ def test_distの外のファイルは取得できない(client):
     for path in targets:
         body = client.get(path).text
         assert "uvicorn" not in body, f"{path} で requirements.txt の中身が返った"
+
+
+def test_indexはキャッシュさせずassetsはキャッシュさせてよい(client, tmp_path, monkeypatch):
+    # 古い index.html が残ると、デプロイ後も前のビルドの JS を読み続けてしまう
+    from app import main
+
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<!doctype html>")
+    (tmp_path / "assets" / "index-abc123.js").write_text("console.log(1)")
+    monkeypatch.setattr(main, "DIST_DIR", tmp_path.resolve())
+
+    for path in ("/", "/library/19"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+    asset = client.get("/assets/index-abc123.js")
+    assert asset.status_code == 200
+    assert "no-cache" not in asset.headers.get("cache-control", "")

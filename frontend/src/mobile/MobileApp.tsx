@@ -282,6 +282,7 @@ export function MobileApp({ data }: { data: AppData }) {
           }}
           onOpenBook={openBook}
           onClose={() => setRecIsbn(null)}
+          books={books}
         />
       ) : null}
 

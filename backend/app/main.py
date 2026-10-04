@@ -70,4 +70,8 @@ def serve_frontend(full_path: str):
         if candidate.is_relative_to(DIST_DIR) and candidate.is_file():
             return FileResponse(candidate)
 
-    return FileResponse(DIST_DIR / "index.html")
+    # index.html は毎回サーバーに確かめさせる（no-cache）。古い index.html が残ると、
+    # デプロイ後も前のビルドの JS を読み続け、消した API を呼んで画面が空になる
+    # （2026-10-04、スマホで「おすすめが出ない」になった）。assets/ は名前にハッシュが
+    # 付いて中身が変われば名前も変わるので、キャッシュさせてよい
+    return FileResponse(DIST_DIR / "index.html", headers={"Cache-Control": "no-cache"})
