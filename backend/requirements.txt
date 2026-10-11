@@ -5,6 +5,7 @@ sqlalchemy>=2.0
 httpx            # Step 3: ISBN から本の情報を取りに行く
 python-multipart # 表紙画像のアップロードを受け取る
 Pillow           # 表紙画像を縮めてから保存する
+PyYAML           # 読書レポートの frontmatter（app/report_store.py）
 
 # --- 開発・テスト用 ---
 pytest

@@ -124,8 +124,12 @@ class Book(Base):
     started_on: Mapped[date | None]
     finished_on: Mapped[date | None]
 
-    # 読書レポートの本文（Markdown）
-    report_md: Mapped[str | None] = mapped_column(Text)
+    # 読書レポートの本文（Markdown）は **ファイルが正**（2026-10-11 に移管）。
+    # app/report_store.py が reports/<book_id>-<タイトル>.md を読み書きする。
+    # 旧 report_md 列は移行前の凍結コピーとして DB に残っているが、ここでマップ
+    # しないことで「アプリからは読み書きしない」を構造的に保証している
+    # （SQLite の列削除は add_missing_columns() の範囲外なので列自体は消さない）。
+    # 理由と境界: Storage/_vault/document-storage-policy.md
 
     # 時刻は SQLite の CURRENT_TIMESTAMP（UTC）ではなく Python 側の JST を使う。
     # そうしないと finished_on（JST）と9時間ずれる。

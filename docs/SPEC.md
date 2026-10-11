@@ -261,11 +261,26 @@ sudo tailscale set --operator=$USER   # 以後 sudo なしで ./run.sh serve が
 | total | int \| null | 総ページ数。CHECK > 0 |
 | started_on | date \| null | 読み始めたら今日（JST）を自動設定 |
 | finished_on | date \| null | 読了になったら今日（JST）を自動設定。**戻しても消さない** |
-| report_html | text \| null | 読書レポートの本文 |
+| ~~report_md~~ | text \| null | 読書レポートの本文。**2026-10-11 にファイルへ移管**（`reports/<book_id>-<タイトル>.md`）。列は凍結コピーとして残っているが、モデルからは外してあるのでアプリは読み書きしない。理由と境界は `Storage/_vault/document-storage-policy.md` |
 | created_at / updated_at | datetime | **Python側で JST を入れる**（`default=now_jst`） |
 
 APIが足して返す値: `progress`（読んだ割合％。総ページ未設定なら `null`）、`note_count`、`has_report`。
-**一覧では `report_html` を返さない**（長いため）。詳細だけが返す。
+**一覧では `report_md` を返さない**（長いため）。詳細だけが返す。
+`report_md` の読み書きは `app/report_store.py` が担い、API の形（`BookDetail.report_md` /
+`BookUpdate.report_md`）は移管の前後で変えていない。
+
+レポートのファイルは Obsidian（`Storage/Notes/reports` の symlink）から直接編集してよい。
+アプリは毎リクエスト mtime+size で再検証するので、再起動なしで反映される。
+- **frontmatter の書誌項目は DB の複製**（title / author / isbn / genre / status / rating /
+  started_on / finished_on / tags）。値が変わったら（ページ進捗から自動で読了になった場合も）
+  アプリが書き直し、Obsidian で書き換えた値は DB の値に戻る。aliases など自分で足したキーは残る。
+  本文も frontmatter も変わらない保存では書き直さない（`updated` と mtime を動かさない）
+- `book_id` は `5` でも `"5"` でも読む。BOM 付きでも読む。本文が空のファイルは「レポート無し」
+- **同じ `book_id` のファイルが複数あるとき**（Obsidian の複製など）は mtime が最新のものを使い、
+  保存でも他方は上書き・削除しない
+- **削除はゴミ箱へ**: 本文を空にしたときと本を消したときは、その `book_id` の全ファイルを
+  `reports/.trash/<日時>-<元の名前>` へ移す（隠しフォルダなので Obsidian にも索引にも出ない）
+- アプリのエディタと Obsidian で同じレポートを同時に開いて保存すると、後から保存したほうが残る
 
 進捗と状態のつじつまは `_apply_progress_rules()` が1箇所で面倒を見る:
 `page >= total` なら読了にする → 読書中/読了になったら開始日を入れる → 読了なら読了日を入れる。
@@ -953,6 +968,12 @@ except anthropic.APIConnectionError: error = "APIに接続できませんでし�
 - **ノートは引用とメモを別物として持つ**: デザインが両者を別の見た目・別の色（引用はマゼンタ）で
   扱い、ページ番号と引用への補足を持つため。旧 `title`/`body` では表現できない
 - **一覧ではレポート本文を返さない**: 長くなるので `has_report` だけ返し、本文は詳細で取る
+- **レポート本文は DB ではなくファイルに置く**（2026-10-11）: 長文・あとから読み返す・推移を
+  追いたい、という性質が DB の TEXT 列と合わない（サービス経由でしか読めず、`grep` も
+  Obsidian も効かず、上書きで前の本文が消え、バックアップが DB 丸ごとコピーしかない）。
+  書誌・進捗・採点・引用メモ・提案は SQL の集計と外部キーが効くほうが素直なので DB に残す。
+  この境界が「一部だけ移管した」の意味。正の鍵はファイル名ではなく frontmatter の `book_id`
+  なので、Obsidian で改名しても壊れない → `Storage/_vault/document-storage-policy.md`
 - **「次に読む本」を手で設定する方式にした**: 実行時に推薦を作ろうとすると、
   外部カタログ頼みになって遅く（国会図書館サーチは実測 0.1〜17秒）、理由も機械的になる。
   読み終わった直後に出す画面で数秒待たせるのは筋が悪い。**1冊につき3件を先に決めておけば、

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
+from .. import report_store
 from ..models import (
     Basis, Book, BookStatus, DismissedBook, Genre, Note, Suggestion, TopicSuggestion,
 )
@@ -200,7 +201,7 @@ def shelve(db: Session, suggestion: Suggestion | TopicSuggestion) -> Book:
     db.commit()
     db.refresh(book)
     book.note_count = 0
-    book.has_report = bool(book.report_md)
+    book.has_report = report_store.has_report(book.id)
     return book
 
 

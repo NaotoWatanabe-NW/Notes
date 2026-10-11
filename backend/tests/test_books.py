@@ -1,6 +1,9 @@
 """本のAPIのテスト"""
+import os
 from datetime import datetime, timedelta
 
+import pytest
+import yaml
 from sqlalchemy import text
 
 from app.timeutil import JST, today_jst
@@ -180,6 +183,128 @@ def test_一覧にはレポート本文を含めず詳細では返す(client):
     client.patch(f"/api/books/{book['id']}", json={"report_md": "## 長い感想"})
     assert "report_md" not in client.get("/api/books").json()[0]
     assert client.get(f"/api/books/{book['id']}").json()["report_md"] == "## 長い感想"
+
+
+# --- レポート本文の置き場所（2026-10-11 に DB の列からファイルへ移管） ---
+
+def _report_files(tmp_path):
+    return sorted((tmp_path / "reports").glob("*.md"))
+
+
+def test_レポート本文はファイルとして保存される(client, tmp_path):
+    book = _create(client, title="達人プログラマー")
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想\n良かった。"})
+
+    (path,) = _report_files(tmp_path)
+    assert path.name == f"{book['id']:04d}-達人プログラマー.md"
+    assert "## 感想" in path.read_text(encoding="utf-8")
+
+
+def test_レポートを空にするとファイルも消える(client, tmp_path):
+    book = _create(client)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    client.patch(f"/api/books/{book['id']}", json={"report_md": ""})
+
+    assert _report_files(tmp_path) == []
+    assert client.get(f"/api/books/{book['id']}").json()["report_md"] is None
+
+
+def test_本を消すとレポートのファイルも消える(client, tmp_path):
+    book = _create(client)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    assert len(_report_files(tmp_path)) == 1
+
+    assert client.delete(f"/api/books/{book['id']}").status_code == 204
+    assert _report_files(tmp_path) == []
+
+
+def test_本の書誌を直すとレポートのfrontmatterも追従する(client, tmp_path):
+    # Obsidian 側から読んだときに状態や採点が古いままにならないようにする
+    book = _create(client)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    client.patch(f"/api/books/{book['id']}", json={"status": "finished", "rating": 5})
+
+    (path,) = _report_files(tmp_path)
+    text_in_file = path.read_text(encoding="utf-8")
+    assert "status: finished" in text_in_file
+    assert "rating: 5" in text_in_file
+    assert "## 感想" in text_in_file
+
+
+def test_ページ進捗の更新ではレポートのファイルを書き直さない(client, tmp_path):
+    # 進捗は頻繁に動くので、毎回書き直すと週次コミットの差分がノイズになる
+    book = _create(client, total=300)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    (path,) = _report_files(tmp_path)
+    before = path.stat().st_mtime_ns
+
+    client.patch(f"/api/books/{book['id']}", json={"page": 120})
+
+    assert path.stat().st_mtime_ns == before
+
+
+def test_ページ数だけ送って自動で読了になるとレポートのfrontmatterも追従する(client, tmp_path):
+    # status を送っていなくても、最後のページまで読めば読了・読了日が入る
+    book = _create(client, total=300)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    (path,) = _report_files(tmp_path)
+    assert "status: finished" not in path.read_text(encoding="utf-8")
+
+    client.patch(f"/api/books/{book['id']}", json={"page": 300})
+
+    text_in_file = path.read_text(encoding="utf-8")
+    assert "status: finished" in text_in_file
+    assert f"finished_on: {today_jst().isoformat()}" in text_in_file
+
+
+def test_タグを変えるとレポートのfrontmatterのタグも追従する(client, tmp_path):
+    book = _create(client)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    client.patch(f"/api/books/{book['id']}", json={"tags": ["設計", "入門"]})
+
+    (path,) = _report_files(tmp_path)
+    meta = yaml.safe_load(path.read_text(encoding="utf-8").split("---")[1])
+    assert sorted(meta["tags"]) == ["入門", "設計"]
+
+
+def test_本を消すと同じidの複製レポートもゴミ箱へ移る(client, tmp_path):
+    book = _create(client)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    (path,) = _report_files(tmp_path)
+    copy = path.with_name(path.stem + " 1.md")
+    copy.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    assert client.delete(f"/api/books/{book['id']}").status_code == 204
+
+    assert _report_files(tmp_path) == []
+    assert len(list((tmp_path / "reports" / ".trash").iterdir())) == 2
+
+
+def test_レポートファイルを片付けられなくても本の削除は204を返す(client, tmp_path):
+    # DB は確定済みなので、ファイル側の OSError では 500 にしない
+    book = _create(client)
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
+    reports = tmp_path / "reports"
+    reports.chmod(0o500)  # ゴミ箱を作れない
+    try:
+        if os.access(reports, os.W_OK):
+            pytest.skip("権限で書き込みを止められない環境（root など）")
+        response = client.delete(f"/api/books/{book['id']}")
+    finally:
+        reports.chmod(0o700)
+
+    assert response.status_code == 204
+    assert client.get(f"/api/books/{book['id']}").status_code == 404
+
+
+def test_本文が空のレポートファイルは一覧でも詳細でもレポート無し扱い(client, tmp_path):
+    book = _create(client)
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    (reports / "empty.md").write_text(f"---\nbook_id: {book['id']}\n---\n", encoding="utf-8")
+
+    assert client.get("/api/books").json()[0]["has_report"] is False
+    assert client.get(f"/api/books/{book['id']}").json()["report_md"] is None
 
 
 # --- 並び替え ---

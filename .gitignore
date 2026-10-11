@@ -8,3 +8,7 @@ reading.db-shm
 node_modules/
 frontend/dist/
 .pytest_cache/
+# 読書レポートの本文と DB ダンプ（個人の記録。この repo は public なのでコミットしない。
+# 履歴は ~/.doc-history/docs.git が持つ。方針: Storage/_vault/document-storage-policy.md）
+reports/
+backup/

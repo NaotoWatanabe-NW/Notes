@@ -1,4 +1,6 @@
 """本に関するAPI（登録・一覧・詳細・更新・削除）"""
+import logging
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlalchemy import func, select
@@ -7,13 +9,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from .. import covers
+from .. import covers, report_store
 from ..models import Book, BookCover, BookSort, BookStatus, Note, Reading, Tag
 from ..schemas import BookCreate, BookDetail, BookRead, BookUpdate
 from ..settings_store import get_settings
 from ..timeutil import now_jst, today_jst
 
 router = APIRouter(prefix="/api/books", tags=["books"])
+logger = logging.getLogger(__name__)
 
 # 並び順。設定画面の「本棚の並び順」と同じ3種類（デザインの settings.sort）。
 # 同じ値の本が並んだときは id の新しい順で決める。
@@ -130,7 +133,8 @@ def _with_counts(db: Session, books: list[Book]) -> list[Book]:
     """一覧で使う集計値（ノート件数・レポートの有無）を各本に付ける。
 
     本ごとに問い合わせると冊数ぶん往復してしまうので、1回のクエリでまとめて
-    数えてから割り当てる。
+    数えてから割り当てる。レポートの有無もファイルを1冊ずつ stat せず、
+    report_store の索引から一度に引く。
     """
     if not books:
         return books
@@ -142,10 +146,37 @@ def _with_counts(db: Session, books: list[Book]) -> list[Book]:
             .group_by(Note.book_id)
         ).all()
     )
+    with_report = report_store.book_ids_with_report()
     for book in books:
         book.note_count = counts.get(book.id, 0)
-        book.has_report = bool(book.report_md)
+        book.has_report = book.id in with_report
     return books
+
+
+# レポートの frontmatter に複製している書誌項目。この値が変わったときだけ
+# ファイルを書き直す（report_store.build_markdown と対応させる）。
+_REPORT_META_FIELDS = (
+    "title", "author", "isbn", "genre", "status", "rating",
+    "started_on", "finished_on",
+)
+
+
+def _report_meta_snapshot(book: Book) -> tuple:
+    """frontmatter に複製している値の現在の組。更新の前後で比べる。"""
+    return (
+        *(getattr(book, name) for name in _REPORT_META_FIELDS),
+        [tag.name for tag in book.tags],
+    )
+
+
+def _attach_report(book: Book) -> Book:
+    """詳細（BookDetail）で返すレポート本文をファイルから読んで付ける。
+
+    `report_md` はモデルの列ではなくなったので、ここで付けた値がそのまま
+    レスポンスになる（DB には書き戻らない）。一覧では本文が要らないので呼ばない。
+    """
+    book.report_md = report_store.read(book.id)
+    return book
 
 
 @router.get("", response_model=list[BookRead])
@@ -180,7 +211,7 @@ def list_books(
 def get_book(book_id: int, db: Session = Depends(get_db)):
     book = _get_book_or_404(db, book_id)
     _with_counts(db, [book])
-    return book
+    return _attach_report(book)
 
 
 @router.post("", response_model=BookDetail, status_code=201)
@@ -201,16 +232,21 @@ def create_book(payload: BookCreate, db: Session = Depends(get_db)):
         db.refresh(book)
 
     _with_counts(db, [book])
-    return book
+    return _attach_report(book)
 
 
 @router.patch("/{book_id}", response_model=BookDetail)
 def update_book(book_id: int, payload: BookUpdate, db: Session = Depends(get_db)):
     book = _get_book_or_404(db, book_id)
     was_finished = book.status == BookStatus.FINISHED
+    meta_before = _report_meta_snapshot(book)
 
     # exclude_unset=True で「送られてきた項目だけ」を取り出す
     changes = payload.model_dump(exclude_unset=True)
+    # レポート本文は DB の列ではなくファイル。ここで取り除いておかないと
+    # setattr で ORM に乗ってしまい、どこにも保存されないまま消える。
+    report_sent = "report_md" in changes
+    report_body = changes.pop("report_md", None)
     if "tags" in changes:
         book.tags = _resolve_tags(db, changes.pop("tags") or [])
     for key, value in changes.items():
@@ -226,8 +262,18 @@ def update_book(book_id: int, payload: BookUpdate, db: Session = Depends(get_db)
 
     _commit(db)
     db.refresh(book)
+
+    # 本文の保存は DB のコミット後。frontmatter に載せる書誌が確定してから書く。
+    if report_sent:
+        report_store.save(book, report_body)
+    elif _report_meta_snapshot(book) != meta_before:
+        # frontmatter の複製を追従させる。送られたキーではなく値の変化で見るのは、
+        # ページ進捗から自動で読了・読了日が入る場合も拾うため。ページ進捗だけで
+        # 何も変わらない更新では書き直さない（mtime が動くと週次コミットの差分がノイズになる）。
+        report_store.refresh_meta(book)
+
     _with_counts(db, [book])
-    return book
+    return _attach_report(book)
 
 
 @router.delete("/{book_id}", status_code=204)
@@ -235,6 +281,13 @@ def delete_book(book_id: int, db: Session = Depends(get_db)):
     book = _get_book_or_404(db, book_id)
     db.delete(book)
     db.commit()
+    # 本を消したらレポートのファイルも消す（孤児を残さない）。
+    # 消したファイルは reports/.trash/ に残る。DB はもう確定しているので、
+    # ファイル側の失敗で 500 にはしない。
+    try:
+        report_store.delete(book_id)
+    except OSError:
+        logger.exception("本 %s のレポートファイルを片付けられなかった", book_id)
 
 
 # ---------------------------------------------------------------- 表紙

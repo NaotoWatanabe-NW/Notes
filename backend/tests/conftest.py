@@ -15,6 +15,16 @@ from app.main import app
 
 
 @pytest.fixture(autouse=True)
+def _isolated_reports_dir(tmp_path, monkeypatch):
+    """読書レポートの本文はファイルなので、テストごとに別のディレクトリへ向ける。
+
+    本番の Notes/reports/ を汚さないため。読み書きは実ファイルで行う
+    （I/O がこの機能の本体なのでモックしない）。
+    """
+    monkeypatch.setenv("NOTES_REPORTS_DIR", str(tmp_path / "reports"))
+
+
+@pytest.fixture(autouse=True)
 def _clear_search_cache():
     """検索結果のキャッシュはテストをまたいで残さない"""
     booklookup.clear_cache()
