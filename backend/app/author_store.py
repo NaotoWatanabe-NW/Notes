@@ -16,7 +16,9 @@
 - **ノートを作るのは、レポートが1冊以上ある著者に限り、どのノートも集めていないときだけアプリ**。
   それ以外の著者はハブ `authors/著者一覧.md` に冊数付きの文字で出す。ユーザーが作ったノートは
   レポートの有無に関係なく埋める。アプリはノートを改名も削除もしない（消されたノートは、
-  著者にレポートがある限り次の回に作り直される）。
+  著者にレポートがある限り次の回に作り直される）。レポートの無い著者も含めて一括で作るときだけ、
+  ユーザーが `scripts/create_notes.py` を流す（作ってよいかの判定は同じ `plan_new_notes`。
+  設計: docs/design/0003-bulk-create-notes.md）。
 - **自動作成は、ノートの名前を確かに読めた回だけ**。編集途中のノートは aliases を読めず、
   まとめたはずの著者のノートを作り直してしまう。frontmatter が解釈できない・空・読めない・
   直近に更新された、のどれかのノートが1つでもある回は、作るのを控える（一覧の書き直しとハブは行う）。
@@ -69,7 +71,6 @@ _ROLE_SUFFIX = re.compile(
     rf"|\s+(?:{_ROLES_SPACED}))\s*$"           # 「 編」「 訳」（空白区切りは紛れない役割だけ）
 )
 _SPACES = re.compile(r"\s+")
-_FRONT_MATTER_OPEN = re.compile(r"---[ \t]*(?:\r?\n|\Z)")   # 先頭の行が `---` だけ（match で使う）
 _KEY_DROP = re.compile(r"[\s・.=·]")          # 照合キーで無視する文字
 _UNSAFE_NAME = re.compile(r'[\\/:*?"<>|#^\[\]\x00-\x1f\x7f]')   # ファイル名・Obsidian のリンクで困る文字
 _STEM_BYTES = 200                              # ファイル名の上限（UTF-8 で 255 バイト未満に収める）
@@ -183,11 +184,12 @@ def split_authors(author: Optional[str]) -> list[str]:
 def note_stem(name: str) -> str:
     """自動作成するノートのファイル名（拡張子なし）。作れない名前なら空文字。
 
-    書式文字と使えない文字を除き、空白を詰め、先頭・末尾の `.` を落とす（隠しファイルにしない）。
+    書式文字と使えない文字を除き、空白を詰め、先頭・末尾の空白と `.` を落とす（隠しファイルにしない。
+    `. .a` のように空白をはさんだ先頭の `.` も残さない）。
     長すぎれば UTF-8 で `_STEM_BYTES` バイトまでに切る（文字の途中では切らない）。
     文字（L*）か数字（N*）を1つも含まない名前（記号・絵文字・結合文字だけ）はファイル名にしない。
     """
-    stem = _SPACES.sub(" ", _UNSAFE_NAME.sub("", _normalize(name))).strip().strip(".")
+    stem = _SPACES.sub(" ", _UNSAFE_NAME.sub("", _normalize(name))).strip(" .")
     stem = stem.encode("utf-8")[:_STEM_BYTES].decode("utf-8", errors="ignore").strip()
     if not any(unicodedata.category(ch)[0] in "LN" for ch in stem):
         return ""
@@ -281,19 +283,6 @@ class NoteScan:
         return None
 
 
-def _doubt_of(text: str, meta: dict) -> str:
-    """読めたノートの aliases を信じてよいか。信じられない理由（信じてよければ空文字）。
-
-    `---` で始まるのに frontmatter が解釈できないのは、書きかけか壊れているとき
-    （`split_front_matter` は壊れていても例外にせず空の辞書を返すので、ここで見分ける）。
-    """
-    if not text.strip():
-        return "空のファイル"
-    if not meta and _FRONT_MATTER_OPEN.match(text):
-        return "frontmatter を解釈できない"
-    return ""
-
-
 # 前の回の doubts と、警告済みの doubts（rebuild はウォッチャーの1スレッドから呼ぶ）
 _seen_doubts: set[tuple[Path, str]] = set()
 _warned_doubts: set[tuple[Path, str]] = set()
@@ -344,7 +333,7 @@ def scan_notes(directory: Path) -> NoteScan:
             continue
         meta, _ = report_store.split_front_matter(text)
         notes.append(_note_of(path, meta, mtime))
-        doubt = _doubt_of(text, meta)
+        doubt = theme_store.front_matter_doubt(text, meta)
         if doubt:
             doubts.append((path, doubt))
     return NoteScan(notes, doubts)
@@ -441,47 +430,100 @@ def new_note_text(author: Author, stem: str) -> str:
             + f"\n# {escape_text(author.name)}\n")
 
 
-def _create_notes(directory: Path, authors: dict[str, Author], notes: list[AuthorNote],
-                  reports: dict[int, Path], themes: list[tuple[Path, set[int]]],
-                  quiet_seconds: float, now: float) -> list[AuthorNote]:
-    """レポートのある著者で、どのノートも集めていないもののノートを作る。作ったノートを返す。
+@dataclass(frozen=True)
+class PlannedNote:
+    author: Author
+    note: AuthorNote      # 雛形を読み直したもの（mtime は None）
+    text: str             # 書く全文（雛形 ＋ マーカー内の一覧）
 
-    作る前に、次の2つを確かめる（満たさなければその著者は作らず、ハブに文字で出る）。
+
+@dataclass(frozen=True)
+class CreatePlan:
+    notes: list[PlannedNote]               # 作るもの（表示名の順）
+    skipped: list[tuple[Author, str]]      # 作らない著者と理由
+    already: list[Author]                  # 既にどれかのノートが集めている著者
+
+
+def plan_new_notes(directory: Path, authors: dict[str, Author], notes: list[AuthorNote],
+                   reports: dict[int, Path], themes: list[tuple[Path, set[int]]],
+                   *, include_without_report: bool = False) -> CreatePlan:
+    """どのノートも集めていない著者のノートの計画。何も書かない。
+
+    既定は、レポートが1冊以上ある著者だけ（アプリの自動作成）。`include_without_report` が
+    True なら全部の著者（`scripts/create_notes.py` の一括作成）。レポートが無くて対象から外れた
+    著者は、`skipped` にも入れない（ハブに文字で出るだけ）。
+
+    作る前に、次の3つを確かめる（満たさなければその著者は作らず、ハブに文字で出る）。
     - 作るノートが、次の回の `scan_notes` と同じ道（雛形を書いて frontmatter を読み、`note_names`）で
       その著者のキーを集める。集められないノートを作ると、毎回作り直しを試みる
     - 作るノートが、その著者のほかに集めるキー（ファイル名にしたときの `a: b` → `a b` のキー）が、
       他の著者のキーでも、既に集められているキーでもない。そうでないと、他の著者の本まで載せたり、
       同じ名前を2つのノートが集めたりする（`ABC*` と `Abc` から `ABC.md` と `Abc.md`）
+    - 書く全文が UTF-8 で書ける。UTF-8 でない名前のテーマノートやレポートのファイルが一覧に入ると
+      書くときに落ちる（`theme_store.can_encode`）
+
+    計画した時点で、そのキーと名前を使用済みにする。書き込みに失敗したときは、後ろの重なる著者が
+    その回は作られず、次の回に回る（安全側）。
     """
     covered = set().union(*(note.keys for note in notes))
-    taken = {note.path.name for note in notes} | {HUB_NAME}
-    created: list[AuthorNote] = []
+    existing = {note.path.name for note in notes}
+    planned: dict[str, Author] = {}              # この回に計画したファイル名 → 著者
+    created: list[PlannedNote] = []
+    skipped: list[tuple[Author, str]] = []
+    already: list[Author] = []
     for author in sorted(authors.values(), key=lambda a: (a.name, a.key)):
-        if author.key in covered or not any(b.id in reports for b in author.books):
+        if author.key in covered:
+            already.append(author)
+            continue
+        if not include_without_report and not any(b.id in reports for b in author.books):
             continue
         stem = note_stem(author.name)
-        if not stem or f"{stem}.md" in taken:
-            continue
-        path = directory / f"{stem}.md"
-        template = new_note_text(author, stem)
-        meta, _ = report_store.split_front_matter(template)
-        note = _note_of(path, meta)
-        if author.key not in note.keys:
-            continue
-        if (note.keys - {author.key}) & (covered | authors.keys()):
-            continue
-        block = author_block(note, books_of(note, authors), reports, themes)
-        text = theme_store.replace_block(template, block)
+        name = f"{stem}.md"
+        if not stem:
+            reason = "ファイル名にできる文字が無い"
+        elif name == HUB_NAME:
+            reason = f"ファイル名がハブ（{HUB_NAME}）と同じになる"
+        elif name in existing:
+            reason = f"{name} が既にあり、この名前を集めていない（そのノートの aliases に足すと集める）"
+        elif name in planned:
+            reason = f"{name} はこの回に「{planned[name].name}」のノートとして作る"
+        elif os.path.lexists(directory / name):
+            reason = f"{name} が既にある（著者ノートとして読めないファイル）"
+        else:
+            template = new_note_text(author, stem)
+            meta, _ = report_store.split_front_matter(template)
+            note = _note_of(directory / name, meta)
+            if author.key not in note.keys:
+                reason = "ノートに書くとこの名前を集められない"
+            elif (note.keys - {author.key}) & (covered | authors.keys()):
+                reason = "ファイル名にすると他の著者か既存のノートの名前と見分けがつかない"
+            else:
+                block = author_block(note, books_of(note, authors), reports, themes)
+                text = theme_store.replace_block(template, block)
+                if text is None:
+                    reason = "一覧を書くとマーカーを読み戻せない（書名や著者名の文字のため）"
+                elif not theme_store.can_encode(text):
+                    reason = theme_store.UNENCODABLE_REASON
+                else:
+                    created.append(PlannedNote(author, note, text))
+                    covered |= note.keys   # 同じ回の後ろの著者の判定に効かせる
+                    planned[name] = author
+                    continue
+        skipped.append((author, reason))
+    return CreatePlan(created, skipped, already)
 
-        def make_new(current: Optional[str], text: Optional[str] = text) -> Optional[str]:
-            # 読んでからロックを取るまでに同じ名前のファイルができていたら、その回は触らない
-            return text if current is None else None
 
-        if theme_store.update_file(path, make_new, quiet_seconds, now):
-            created.append(note)
-            covered |= note.keys   # 同じ回の後ろの著者の判定に効かせる
-            taken.add(path.name)
-    return created
+def _create_notes(directory: Path, authors: dict[str, Author], notes: list[AuthorNote],
+                  reports: dict[int, Path], themes: list[tuple[Path, set[int]]],
+                  quiet_seconds: float, now: float) -> list[AuthorNote]:
+    """レポートのある著者で、どのノートも集めていないもののノートを作る。作ったノートを返す。
+
+    作ってよいかの判定は `plan_new_notes`。読んでからロックを取るまでに同じ名前のファイルが
+    できていたら、`create_file` がその回は触らない。
+    """
+    plan = plan_new_notes(directory, authors, notes, reports, themes)
+    return [p.note for p in plan.notes
+            if theme_store.create_file(p.note.path, p.text, quiet_seconds, now)]
 
 
 # ── 差し込み ────────────────────────────────────────────────

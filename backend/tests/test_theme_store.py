@@ -8,12 +8,14 @@ import functools
 import logging
 import os
 import threading
+import time
+import unicodedata
 from datetime import date
 from pathlib import Path
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import report_store, theme_store
 from app.models import Book, BookStatus, Tag
@@ -885,3 +887,312 @@ class TestWatcher:
 
         assert calls == ["healthy", "healthy"]
         assert len([r for r in caplog.records if r.levelno == logging.ERROR]) == 1
+
+
+# ── 一括作成（scripts/create_notes.py が使う部品）──────────────────
+
+def settle(path, age=60):
+    """ノートの更新時刻を `age` 秒前にする（直近に更新されたノートとして待たれないように）。"""
+    mtime = time.time() - age
+    os.utime(path, (mtime, mtime))
+
+
+class TestNoteStem:
+    @pytest.mark.parametrize("tag, expected", [
+        ("日本史/近代", "日本史近代"),
+        ("x:y", "xy"),
+        ("C#", "C"),
+        ("a  b", "a b"),
+        (".隠れ", "隠れ"),
+        (". .a", "a"),
+    ])
+    def test_ファイル名に使えない文字を落とす(self, tag, expected):
+        assert theme_store.note_stem(tag) == expected
+
+    @pytest.mark.parametrize("invisible", ["​", "⁠", "­", "﻿"])
+    def test_見えない書式文字を落とす(self, invisible):
+        assert theme_store.note_stem(f"{invisible}地政{invisible}学{invisible}") == "地政学"
+
+    @pytest.mark.parametrize("tag", ["ＳＦ", "ｶﾞｲﾄﾞ", "Ａ１"])
+    def test_NFKCをかけない(self, tag):
+        # テーマの照合はタグ名の完全一致。表記を変えるとノートに tags を書かないと集められない
+        assert theme_store.note_stem(tag) == tag
+
+    @pytest.mark.parametrize("tag", ["...", "#^[]", "́́", "​", "   "])
+    def test_使える文字が無ければ空になる(self, tag):
+        assert theme_store.note_stem(tag) == ""
+
+    def test_絵文字だけのタグはファイル名にできる(self):
+        assert theme_store.note_stem("📚") == "📚"
+
+    def test_UTF8で200バイトまでに文字の途中で切らずに収める(self):
+        stem = theme_store.note_stem("a" + "あ" * 100)
+
+        # 200 バイト目は「あ」(3バイト)の途中。途中の文字は捨てて 199 バイトになる
+        assert stem == "a" + "あ" * 66
+        assert len(stem.encode("utf-8")) == 199
+
+    def test_切り詰めた末尾が空白ならその空白も落とす(self):
+        # 200 バイト目がちょうど空白。ファイル名の末尾に空白を残さない
+        assert theme_store.note_stem("a" * 199 + " あ") == "a" * 199
+
+
+class TestNewNoteText:
+    def test_ファイル名とタグが同じならtagsを書かない(self):
+        text = theme_store.new_note_text("地政学", "地政学")
+
+        meta, body = report_store.split_front_matter(text)
+        assert meta == {"type": "theme-note"}
+        assert body == "\n# 地政学\n"
+
+    def test_ファイル名とタグが違えばtagsにタグ名だけを書く(self):
+        text = theme_store.new_note_text("日本史/近代", "日本史近代")
+
+        meta, body = report_store.split_front_matter(text)
+        assert meta == {"type": "theme-note", "tags": ["日本史/近代"]}
+        assert body == "\n# 日本史/近代\n"
+
+    @pytest.mark.parametrize("tag, stem, heading", [
+        ("C#", "C", "# C\\#"),
+        ("*a*", "a", "# \\*a\\*"),
+    ])
+    def test_見出しは記号をエスケープしたタグ名にする(self, tag, stem, heading):
+        # 生で書くと、Obsidian では # がタグ・* が強調になり、見出しがタグ名どおりに読めない
+        text = theme_store.new_note_text(tag, stem)
+
+        assert text.endswith(f"\n{heading}\n")
+
+
+class TestPlanNewNotes:
+    def plan(self, db, themes):
+        books = list(db.scalars(select(Book).options(selectinload(Book.tags)).order_by(Book.id)))
+        return theme_store.plan_new_notes(themes, books, report_store.report_paths(),
+                                          theme_store.scan_notes(themes))
+
+    def test_計画は何も書かない(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学", "日本史/近代"])
+
+        plan = self.plan(db, themes)
+
+        assert [p.note.path.name for p in plan.notes] == ["地政学.md", "日本史近代.md"]
+        assert list(themes.iterdir()) == []
+
+    def test_既に集められているタグはalreadyに入る(self, db, shelf, themes):
+        shelf.add("本1", tags=["日本史", "世界史", "経済"])
+        write_note(themes, "歴史.md", "---\ntags: [日本史, 世界史]\n---\n")
+
+        plan = self.plan(db, themes)
+
+        assert plan.already == ["世界史", "日本史"]
+        assert [p.tag for p in plan.notes] == ["経済"]
+        assert plan.skipped == []
+
+    def test_壊れたsymlinkと同じ名前のタグは作らない(self, db, shelf, themes):
+        shelf.add("本1", tags=["地政学"])
+        os.symlink("存在しない.md", themes / "地政学.md")
+
+        plan = self.plan(db, themes)
+
+        assert plan.notes == []
+        assert plan.skipped == [("地政学", "地政学.md が既にある（テーマノートとして読めないファイル）")]
+
+    @pytest.mark.parametrize("tags, owner, other", [
+        (["C#", "C"], "C", "C#"),
+        # タグ順では「日本史/近代」が先。ファイル名と一致する「日本史近代」が日本史近代.md を取る
+        (["日本史/近代", "日本史近代"], "日本史近代", "日本史/近代"),
+    ])
+    def test_同じファイル名になるタグはファイル名と一致するほうを先に作る(self, db, shelf, themes, tags, owner, other):
+        shelf.add("本1", tags=tags)
+
+        plan = self.plan(db, themes)
+
+        assert [p.tag for p in plan.notes] == [owner]
+        assert plan.skipped == [(other, f"{plan.notes[0].note.path.name} はこの回に「{owner}」のノートとして作る")]
+        assert theme_store.theme_tags(
+            report_store.split_front_matter(plan.notes[0].text)[0], plan.notes[0].note.path.stem) == (owner,)
+
+    def test_一覧がフェンスを開いてしまうタグは作らずに理由を出す(self, db, shelf, themes):
+        # 集めるタグはコメントの行に生で書く。タグに改行があると、次の行がコメントの外に出てフェンスを開く
+        tag = "a -->\n~~~"
+        shelf.add("本1", tags=[tag, "地政学"])
+
+        plan = self.plan(db, themes)
+
+        assert [p.tag for p in plan.notes] == ["地政学"]
+        assert plan.skipped == [(tag, "一覧を書くとマーカーを読み戻せない（タグ名や書名の文字のため）")]
+
+    @pytest.mark.parametrize("tag", ["a\rb", "a\r\nb"])
+    def test_CRを含むタグは読み戻すと内容が変わるので作らずに理由を出す(self, db, shelf, themes, tag):
+        # CR は read_text が LF に直す。書いた内容と読み戻した内容が違うと、アプリが毎回書き直す
+        shelf.add("本1", tags=[tag, "地政学"])
+
+        plan = self.plan(db, themes)
+
+        assert [p.tag for p in plan.notes] == ["地政学"]
+        assert plan.skipped == [
+            (tag, "一覧に CR の文字が入り、書いた内容が読み戻すと変わる（タグ名や書名の文字のため）")]
+
+    @pytest.mark.parametrize("tag", ["x -->\r~~~", "-->\r<!-- notes:books:end -->\ry"])
+    def test_CRで行が分かれてマーカーを隠すタグは作らずに理由を出す(self, db, shelf, themes, tag):
+        # 書く前の文字列は1行に見えるが、読み戻すと CR で行が分かれ、フェンスが開く・END が増える
+        shelf.add("本1", tags=[tag, "地政学"])
+
+        plan = self.plan(db, themes)
+
+        assert [p.tag for p in plan.notes] == ["地政学"]
+        assert plan.skipped == [(tag, "一覧を書くとマーカーを読み戻せない（タグ名や書名の文字のため）")]
+
+    def test_作らないタグは理由が出た段階によらずタグ順に並ぶ(self, db, shelf, themes):
+        # 「\u0301」は計画の段階で、「a\rb」は一覧を作ったあとの検証で外れる。後者のほうが先に並ぶタグ
+        shelf.add("本1", tags=["\u0301", "a\rb"])
+
+        plan = self.plan(db, themes)
+
+        assert [tag for tag, _ in plan.skipped] == ["a\rb", "\u0301"]
+
+    def test_alreadyはタグ順に並ぶ(self, db, shelf, themes):
+        # 「a/」はファイル名にすると別の名前になるので、計画ではあとに回る。並びはタグ順
+        shelf.add("本1", tags=["b", "a/"])
+        write_note(themes, "歴史.md", "---\ntags: [b, a/]\n---\n")
+
+        plan = self.plan(db, themes)
+
+        assert plan.already == ["a/", "b"]
+
+    def test_NFCとNFDだけが違うタグはファイル名が重なるので片方だけ作る(self, db, shelf, themes):
+        # 見た目が同じ名前が2つ並ぶ。macOS / iOS のファイルシステムは区別せず、同期すると衝突する
+        nfc = unicodedata.normalize("NFC", "ガイド")
+        nfd = unicodedata.normalize("NFD", "ガイド")
+        assert nfc != nfd
+        shelf.add("本1", tags=[nfc, nfd])
+
+        plan = self.plan(db, themes)
+
+        assert len(plan.notes) == 1
+        assert [tag for tag, _ in plan.skipped] == [t for t in (nfc, nfd) if t != plan.notes[0].tag]
+        assert "Unicode の正規化（NFC）で同じ名前になる" in plan.skipped[0][1]
+
+    def test_既存のノートとNFCで同じ名前になるタグは作らない(self, db, shelf, themes):
+        nfc = unicodedata.normalize("NFC", "ガイド")
+        nfd = unicodedata.normalize("NFD", "ガイド")
+        shelf.add("本1", tags=[nfc])
+        write_note(themes, f"{nfd}.md", "# メモ\n")    # macOS から同期されたような NFD の名前
+
+        plan = self.plan(db, themes)
+
+        assert plan.notes == []
+        assert [tag for tag, _ in plan.skipped] == [nfc]
+        assert "Unicode の正規化（NFC）で同じ名前になる" in plan.skipped[0][1]
+
+    def test_UTF8でない名前のノートが一覧に入るタグは作らずに理由を出す(self, db, shelf, themes):
+        # UTF-8 でないバイトの名前（文字コードの違う zip の展開など）は、読むとサロゲートの文字になる。
+        # 一覧のリンクに入ると、書くときに UnicodeEncodeError で落ちて一時ファイルが残る
+        shelf.add("本1", tags=["T", "U"])
+        shelf.add("本2", tags=["V"])
+        bad = os.path.join(os.fsencode(themes), b"caf\xe9.md")
+        try:
+            with open(bad, "wb") as handle:
+                handle.write("---\ntags: [T]\n---\n".encode())
+        except OSError:
+            pytest.skip("このファイルシステムは UTF-8 でない名前のファイルを作れない")
+
+        plan = self.plan(db, themes)
+
+        # 本1を共有する U は、T を集めるノートを「関連するテーマ」に出すので作れない。V は関係ない
+        assert [p.tag for p in plan.notes] == ["V"]
+        assert plan.skipped == [("U", theme_store.UNENCODABLE_REASON)]
+        assert all(theme_store.can_encode(p.text) for p in plan.notes)
+
+
+class TestCanEncode:
+    def test_ふつうの文字は書ける(self):
+        assert theme_store.can_encode("地政学 café 📚\r\n") is True
+
+    def test_UTF8でないバイトの名前から来るサロゲートは書けない(self):
+        assert theme_store.can_encode(os.fsdecode(b"caf\xe9")) is False
+
+
+class TestUnsettledReason:
+    @pytest.mark.parametrize("content, age, expected", [
+        (b"", 60, "空のファイル"),
+        (b"\n  \n", 60, "空のファイル"),
+        ("---\ntags: [歴史]\n\n# 歴史\n".encode(), 60, "frontmatter を解釈できない"),
+        ("---\ntags: [歴史, \n---\n".encode(), 60, "frontmatter を解釈できない"),
+        # BOM つきでも frontmatter として読む（utf-8-sig）
+        (b"\xef\xbb\xbf" + "---\ntags: [歴史, \n---\n".encode(), 60, "frontmatter を解釈できない"),
+        # 正しく閉じた空の frontmatter（Obsidian のプロパティを全部消すとできる）も待つ。解釈できた
+        # 辞書が空なのか、壊れているのか、ここでは見分けない
+        ("---\n---\n自分のメモ\n".encode(), 60, "frontmatter を解釈できない"),
+        (b"---\ntags: [H\xff]\n---\n", 60, "読めない（UnicodeDecodeError）"),
+        ("# 歴史\n".encode(), 0, "直近に更新された"),
+        ("# 歴史\n".encode(), -5, "直近に更新された"),   # mtime が now より少し先（保存の途中）
+    ])
+    def test_編集途中や壊れたノートがあれば理由を返す(self, themes, content, age, expected):
+        path = themes / "歴史.md"
+        path.write_bytes(content)
+        settle(path, age)
+
+        reason = theme_store.unsettled_reason(themes, time.time(), 10.0)
+
+        assert reason == f"歴史.md: {expected}"
+
+    def test_怪しいノートが複数あれば名前順で最初のものを返す(self, themes):
+        for name in ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md"]:
+            settle(write_note(themes, name, ""))
+
+        assert theme_store.unsettled_reason(themes, time.time(), 10.0) == "a.md: 空のファイル"
+
+    def test_更新時刻が大きく先のノートは待たない(self, themes):
+        # 同期のずれなどで1分以上先の mtime のノートを待ち続けると、永久に作れない（update_file と同じ）
+        settle(write_note(themes, "歴史.md", "# 歴史\n"), age=-3600)
+
+        assert theme_store.unsettled_reason(themes, time.time(), 10.0) is None
+
+    def test_ハブと隠しファイルは見ない(self, themes):
+        for name in [HUB_NAME, ".下書き.md", "メモ.txt"]:
+            write_note(themes, name, "")           # 空で、いま書いたばかり
+        (themes / "サブ").mkdir()
+        write_note(themes / "サブ", "歴史.md", "")
+
+        assert theme_store.unsettled_reason(themes, time.time(), 10.0) is None
+
+    @pytest.mark.parametrize("content", ["---\ntags: [歴史]\n---\n\n# 歴史\n", "# 歴史\n\n自分のまとめ。\n"])
+    def test_落ち着いたノートだけなら理由は無い(self, themes, content):
+        settle(write_note(themes, "歴史.md", content))
+        settle(write_note(themes, "地政学.md", "# 地政学\n"))
+
+        assert theme_store.unsettled_reason(themes, time.time(), 10.0) is None
+
+    def test_壊れたsymlinkはノートではないので待たない(self, themes):
+        os.symlink("存在しない.md", themes / "歴史.md")
+
+        assert theme_store.unsettled_reason(themes, time.time(), 10.0) is None
+
+    def test_フォルダが無ければ理由は無い(self, tmp_path):
+        assert theme_store.unsettled_reason(tmp_path / "無い", time.time(), 10.0) is None
+
+    def test_フォルダを開けなければ例外を上げる(self, tmp_path):
+        # 「怪しいノートは無い」ではなく失敗にする（呼び出し側が受けて作るのをやめる）
+        not_a_directory = tmp_path / "themes"
+        not_a_directory.write_text("", encoding="utf-8")
+
+        with pytest.raises(OSError):
+            theme_store.unsettled_reason(not_a_directory, time.time(), 10.0)
+
+
+class TestCreateFile:
+    def test_無ければ作る(self, themes):
+        path = themes / "地政学.md"
+
+        assert theme_store.create_file(path, "# 地政学\n", 10.0, time.time()) is True
+
+        assert path.read_text(encoding="utf-8") == "# 地政学\n"
+        assert not (themes / ("地政学.md" + report_store.TMP_SUFFIX)).exists()
+
+    def test_既にあれば上書きしない(self, themes):
+        path = write_note(themes, "地政学.md", "ユーザーの本文\n")
+        settle(path)
+
+        assert theme_store.create_file(path, "# 地政学\n", 10.0, time.time()) is False
+
+        assert path.read_text(encoding="utf-8") == "ユーザーの本文\n"

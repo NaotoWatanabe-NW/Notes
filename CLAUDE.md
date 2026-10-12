@@ -42,7 +42,7 @@ Notes/
 │   └── design/                 設計書（§8）
 ├── books.txt                   本のメモ（用途の記載なし。アプリは読まない）
 ├── reports/                    読書レポート・テーマノート・著者ノート（git 管理外。§4）
-├── scripts/                    移行スクリプト（migrate_report_md_to_files.py / strip_report_frontmatter.py。一回限り）
+├── scripts/                    一回限りのスクリプト（migrate_report_md_to_files.py / strip_report_frontmatter.py / create_notes.py）
 ├── Notes App Base Design/      デザインの正本（触らない）
 ├── .claude/
 │   ├── agents/                 サブエージェントの定義（§9）
@@ -113,7 +113,7 @@ Notes/
     - frontmatter でアプリが持つのは `type`・`book_id`・`updated` だけ
     - 正の鍵は `book_id`。ファイル名は人が読むための飾りで、タイトルを直しても改名しない
     - 同じ `book_id` のファイルが複数あれば mtime が最新のものを使う。保存は主の1つにだけ書き、他は上書き・削除しない
-  - テーマノート: `reports/themes/*.md`（タグごと。**ユーザーが作る**）
+  - テーマノート: `reports/themes/*.md`（タグごと。**ユーザーが作る**。いまあるタグと本棚の著者のノートは `scripts/create_notes.py` で一括で作れる。0003）
   - 著者ノート: `reports/authors/*.md`（レポートのある著者はアプリが自動で作る。ユーザーが手で作ってもよい。0002）
   - ハブ `reports/authors/著者一覧.md`（アプリが作る。ノートの無い著者を冊数つきで並べる）
 - **ビュー（例外）**: テーマノート・著者ノート・ハブ（`reports/themes/テーマ一覧.md`・`reports/authors/著者一覧.md`）の `<!-- notes:books:start -->` 〜 `<!-- notes:books:end -->` の間は、DB から数秒ごとに作り直す一覧。アプリは読み戻さない。**手で編集しない**（マーカーの外は自由に書いてよい）

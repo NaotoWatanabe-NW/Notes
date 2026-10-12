@@ -13,7 +13,8 @@
   `tags` が無ければファイル名をタグ名とみなす（`themes/地政学.md` を作るだけでよい）。
 - **ノートを作るのはユーザー**。アプリはタグごとのノートを勝手に作らない。
   例外はハブ `themes/テーマ一覧.md` で、全テーマノートとノートのまだ無いタグを並べる
-  全体の入口として、無ければアプリが作る。
+  全体の入口として、無ければアプリが作る。いまあるタグのノートを一括で作るときだけ、
+  ユーザーが `scripts/create_notes.py` を流す（設計: docs/design/0003-bulk-create-notes.md）。
 - **書き直すのは中身が変わったときだけ**（mtime を動かさない）。さらに、直近
   `QUIET_SECONDS` 秒以内に更新されたノートは、Obsidian で書いている最中かもしれないので
   その回は飛ばす（次の回で入る）。mtime が `QUIET_SECONDS` 秒以上未来のノートは
@@ -36,8 +37,8 @@ Obsidian はこのロックを取らないので、読んでから置き換え�
 置き換えずにその回は諦める（`report_store.write_atomic` の `expect`。次の回でやり直す）。
 1ファイルの書き込み失敗でジョブ全体は止めず、パスごとに警告を1回だけ出して続ける。
 
-ここの `escape_text` / `md_link` / `wrap_block` / `update_file` / `book_sections` /
-`replace_block` / `fill_block` は著者ノート（`author_store.py`）も使う共有部品。
+ここの `escape_text` / `md_link` / `wrap_block` / `update_file` / `create_file` / `book_sections` /
+`replace_block` / `fill_block` / `front_matter_doubt` / `can_encode` は著者ノート（`author_store.py`）も使う共有部品。
 `ThemeWatcher` も、テーマと著者の両方のジョブをまとめて数秒ごとに回す。
 """
 
@@ -46,6 +47,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -61,11 +63,17 @@ logger = logging.getLogger(__name__)
 
 THEMES_DIRNAME = "themes"
 HUB_NAME = "テーマ一覧.md"
+NOTE_TYPE = "theme-note"
 START = "<!-- notes:books:start -->"
 END = "<!-- notes:books:end -->"
 # この秒数以内に更新されたノートは、書いている最中とみなしてその回は飛ばす
 QUIET_SECONDS = 10.0
 INTERVAL_SECONDS = 5.0
+
+_SPACES = re.compile(r"\s+")
+_FRONT_MATTER_OPEN = re.compile(r"---[ \t]*(?:\r?\n|\Z)")   # 先頭の行が `---` だけ（match で使う）
+_UNSAFE_NAME = re.compile(r'[\\/:*?"<>|#^\[\]\x00-\x1f\x7f]')   # ファイル名・Obsidian のリンクで困る文字
+_STEM_BYTES = 200                              # ファイル名の上限（UTF-8 で 255 バイト未満に収める）
 
 _STATUS_LABEL = {
     BookStatus.READING: "読書中",
@@ -532,6 +540,221 @@ def _update_locked(path: Path, make_text: Callable[[Optional[str]], Optional[str
     # 前の失敗は直ったとみなす
     _warned_write_failed.discard(path)
     return written
+
+
+def create_file(path: Path, text: str, quiet_seconds: float, now: float) -> bool:
+    """`path` が無いときだけ `text` で作る。作ったら True。
+
+    既にある（ロックを取るまでに誰かが作った・Obsidian で作った）なら触らず False。
+    新規作成は `write_atomic` の `ABSENT`（`os.link`）なので、直前にできた同名のファイルも
+    上書きしない。書けない（OSError）ときも False（警告は `update_file` が出す）。
+    """
+    def make_new(current: Optional[str]) -> Optional[str]:
+        return text if current is None else None
+
+    return update_file(path, make_new, quiet_seconds, now)
+
+
+# ── 一括作成（scripts/create_notes.py が使う）────────────────────
+
+def note_stem(tag: str) -> str:
+    """タグから作るテーマノートのファイル名（拡張子なし）。作れない名前なら空文字。
+
+    書式文字と使えない文字を除き、空白を詰め、先頭・末尾の `.` を落とす（隠しファイルにしない）。
+    長すぎれば UTF-8 で `_STEM_BYTES` バイトまでに切る（文字の途中では切らない）。
+    文字・数字・句読点・記号（L/N/P/S）を1つも含まない名前（結合文字・空白だけ）はファイル名にしない。
+
+    著者ノートの `author_store.note_stem` と違い NFKC はかけない。テーマの照合はタグ名の
+    完全一致なので、表記を変えるとノートに `tags` を書かないと集められなくなる。
+    記号（S）を許すのは、絵文字だけのタグも作れるようにするため。
+    """
+    kept = "".join(ch for ch in tag if unicodedata.category(ch) != "Cf")
+    # 空白も一緒に落とすのは、`. .a` のように空白をはさんだ先頭の `.` を残さないため
+    stem = _SPACES.sub(" ", _UNSAFE_NAME.sub("", kept)).strip(" .")
+    stem = stem.encode("utf-8")[:_STEM_BYTES].decode("utf-8", errors="ignore").strip()
+    if not any(unicodedata.category(ch)[0] in "LNPS" for ch in stem):
+        return ""
+    return stem
+
+
+def new_note_text(tag: str, stem: str) -> str:
+    """一括作成するテーマノートの雛形（マーカーはまだ無い）。
+
+    ファイル名がタグと違うとき（使えない文字を落とした・切った）だけ `tags` を書く。
+    書かないと、ファイル名をタグ名とみなす規則で別のタグを集めてしまう。
+    """
+    meta: dict = {"type": NOTE_TYPE}
+    if stem != tag:
+        meta["tags"] = [tag]
+    return report_store.front_matter_text(meta) + f"\n# {escape_text(tag)}\n"
+
+
+def front_matter_doubt(text: str, meta: dict) -> str:
+    """読めたノートの frontmatter を信じてよいか。信じられない理由（信じてよければ空文字）。
+
+    `---` で始まるのに frontmatter が解釈できないのは、書きかけか壊れているとき
+    （`split_front_matter` は壊れていても例外にせず空の辞書を返すので、ここで見分ける）。
+    著者ノートの aliases とテーマノートの tags の両方が、書きかけのノートを待つ判定に使う。
+    """
+    if not text.strip():
+        return "空のファイル"
+    if not meta and _FRONT_MATTER_OPEN.match(text):
+        return "frontmatter を解釈できない"
+    return ""
+
+
+def unsettled_reason(directory: Path, now: float, quiet_seconds: float) -> Optional[str]:
+    """テーマノートの集めるタグをまだ信じられない理由（`ファイル名: 理由`）。信じてよければ None。
+
+    `scan_notes` は読めないノートを黙って飛ばし、壊れた frontmatter はファイル名だけを集める
+    とみなす。そのまま「どのノートも集めていない」と判定すると、複数のタグをまとめたノートを
+    書きかけのときに、同じタグのノートを重ねて作ってしまう。だから、読めない・空・frontmatter が
+    解釈できない・直近に更新された（`update_file` と同じ、`now` の前後 `quiet_seconds` 秒）ノートが
+    ひとつでもある間は、一括作成を待つ。ディレクトリがまだ無いのは「怪しいノート無し」。
+    """
+    try:
+        with os.scandir(directory) as it:
+            entries = sorted(
+                (e for e in it
+                 if e.name.endswith(".md") and not e.name.startswith(".") and e.name != HUB_NAME),
+                key=lambda e: e.name,
+            )
+    except FileNotFoundError:
+        return None
+    for entry in entries:
+        path = Path(entry.path)
+        try:
+            if not entry.is_file():   # 壊れた symlink は例外にならず False（ノートではない）
+                continue
+            mtime = path.stat().st_mtime
+            text = path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError) as error:
+            return f"{path.name}: 読めない（{type(error).__name__}）"
+        meta, _ = report_store.split_front_matter(text)
+        doubt = front_matter_doubt(text, meta)
+        if doubt:
+            return f"{path.name}: {doubt}"
+        if abs(now - mtime) < quiet_seconds:
+            return f"{path.name}: 直近に更新された"
+    return None
+
+
+UNENCODABLE_REASON = ("一覧に UTF-8 にできない文字が入る"
+                      "（UTF-8 でない名前のノートやレポートのファイルがある。名前を直すと作る）")
+
+
+def can_encode(text: str) -> bool:
+    """`write_atomic` が UTF-8 で書ける全文か。
+
+    UTF-8 でないバイトのファイル名（文字コードの違う zip の展開など）は、読むとサロゲートの
+    文字になる。一覧のリンクや名前に入ると、書くときに UnicodeEncodeError で落ちて一時ファイルが残る。
+    """
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def _name_key(name: str) -> str:
+    """ファイル名の重なりを見る鍵。NFC に揃えて、見た目が同じ名前を同じとみなす。
+
+    macOS / iOS のファイルシステムは NFC と NFD を区別しないので、vault を同期すると衝突する。
+    Linux では別のファイルとして作れてしまうが、Obsidian の一覧に同じ名前が2つ並ぶ。
+    """
+    return unicodedata.normalize("NFC", name)
+
+
+@dataclass(frozen=True)
+class PlannedNote:
+    tag: str
+    note: ThemeNote       # 作るパスと、雛形を読み直した集めるタグ（= (tag,)）
+    text: str             # 書く全文（雛形 ＋ マーカー内の一覧）
+
+
+@dataclass(frozen=True)
+class CreatePlan:
+    notes: list[PlannedNote]           # 作るもの（ファイル名がタグと一致するタグが先、あとはタグ順）
+    skipped: list[tuple[str, str]]     # 作らないタグと理由（タグ順）
+    already: list[str]                 # 既にどれかのノートが集めているタグ（タグ順）
+
+
+def plan_new_notes(directory: Path, books: list[Book], reports: dict[int, Path],
+                   notes: list[ThemeNote]) -> CreatePlan:
+    """本に付いているタグのうち、どのテーマノートも集めていないもののノートの計画。何も書かない。
+
+    作る前に、そのタグごとに次を確かめる（満たさなければ作らず、理由を `skipped` に残す）。
+    - ファイル名にできる名前があり、ハブ・既存のノート・この回に先に計画したノートと重ならず
+      （Unicode の NFC と NFD だけが違う名前も重なりとみなす）、同名の読めないファイル
+      （壊れた symlink・フォルダ）も無い
+    - 雛形を書いて frontmatter を読み直す（次の回の `scan_notes` と同じ道）と、集めるタグが
+      ちょうどそのタグ1つになる。ならないノートを作ると、毎回作り直しを試みる
+    - 書く全文が、次の回に読み戻したとき（`read_text` は CR を LF に直す）もマーカーの組が1つ見え、
+      書いた内容と同じで、UTF-8 で書ける
+
+    ファイル名がタグと一致するタグを先に見る（`C` と `C#` が両方 `C.md` になるとき、`C.md` は `C` のもの）。
+    """
+    tags = {tag.name for book in books for tag in book.tags}
+    covered = {tag for note in notes for tag in note.tags}
+    existing = {note.path.name for note in notes}
+    planned: dict[str, str] = {}                 # この回に計画したファイル名 → タグ
+    candidates: list[tuple[str, ThemeNote, str]] = []
+    skipped: list[tuple[str, str]] = []
+    already: list[str] = []
+    for tag in sorted(tags, key=lambda t: (note_stem(t) != t, t)):
+        if tag in covered:
+            already.append(tag)
+            continue
+        stem = note_stem(tag)
+        name = f"{stem}.md"
+        if not stem:
+            reason = "ファイル名にできる文字が無い"
+        elif name == HUB_NAME:
+            reason = f"ファイル名がハブ（{HUB_NAME}）と同じになる"
+        elif name in existing:
+            reason = (f"{name} が既にあり、このタグを集めていない"
+                      "（そのノートの frontmatter の tags に足すと集める）")
+        elif name in planned:
+            reason = f"{name} はこの回に「{planned[name]}」のノートとして作る"
+        elif _name_key(name) in {_name_key(other) for other in (*existing, *planned)}:
+            reason = (f"{name} は、既にあるか先に作るノートの名前と Unicode の正規化（NFC）で"
+                      "同じ名前になる")
+        elif os.path.lexists(directory / name):
+            reason = f"{name} が既にある（テーマノートとして読めないファイル）"
+        else:
+            template = new_note_text(tag, stem)
+            meta, _ = report_store.split_front_matter(template)
+            read = theme_tags(meta, stem)
+            if read != (tag,):
+                reason = f"ノートに書くと集めるタグが「{'・'.join(read)}」になり、このタグと一致しない"
+            else:
+                planned[name] = tag
+                candidates.append((tag, ThemeNote(directory / name, read), template))
+                continue
+        skipped.append((tag, reason))
+
+    # 一覧の「関連するテーマ」には、同じ回に作るノートも出す（アプリが次の回に作る一覧と同じ中身に
+    # なるので、アプリは書き直さない）
+    after = notes + [note for _, note, _ in candidates]
+    created: list[PlannedNote] = []
+    for tag, note, template in candidates:
+        text = replace_block(template, theme_block(note, books, reports, after))
+        # fill_block と同じ自己検証を、次の回の scan_notes が読む形（read_text は CR を LF に直す）で行う。
+        # 書名などの文字がフェンスを開くと、以後そのノートが止まる
+        read_back = None if text is None else text.replace("\r\n", "\n").replace("\r", "\n")
+        if read_back is None or not _has_one_pair(read_back):
+            reason = "一覧を書くとマーカーを読み戻せない（タグ名や書名の文字のため）"
+        elif read_back != text:
+            # 集めるタグはコメントの行に生で書くので、CR を含むタグがそのまま入る。読み戻すと別の中身に
+            # なって毎回書き直され、CR が行を分けてマーカーを隠すこともある
+            reason = "一覧に CR の文字が入り、書いた内容が読み戻すと変わる（タグ名や書名の文字のため）"
+        elif not can_encode(text):
+            reason = UNENCODABLE_REASON
+        else:
+            created.append(PlannedNote(tag, note, text))
+            continue
+        skipped.append((tag, reason))
+    return CreatePlan(created, sorted(skipped), sorted(already))
 
 
 def rebuild(db: Session, *, quiet_seconds: float = QUIET_SECONDS,

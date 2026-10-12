@@ -3,7 +3,7 @@
 読書記録と学習ノート（本の要約・感想、技術書の勉強）を残す個人用Webアプリ。
 **自動化・連携**（ISBNからの本情報取得、読了時の「次に読む本」提案）を最重視する。
 
-- 最終更新: 2026-10-12（保存の境界 0001・著者ノート 0002 を反映。§2・§3 の古い記述を実装に合わせた）
+- 最終更新: 2026-10-12（保存の境界 0001・著者ノート 0002・一括作成 0003 を反映。§2・§3 の古い記述を実装に合わせた）
 - 現在地: **PC版・モバイル版とも完成**
 - **デザインの正本は `Notes App Base Design/design_handoff_notes_reading_app/`**。README.md が画面仕様、`_ds/broadsheet-…/styles.css` がトークンの正本。同梱の `.dc.html` はプロトタイプで、React で再実装してある
 
@@ -132,7 +132,7 @@ Notes/                          ← git リポジトリのルート
 │   ├── SPEC.md                 このファイル（いまの仕様。正本）
 │   ├── systemd-service.md      母艦の常駐（notes-web）の手順
 │   └── design/                 設計書（なぜそう決めたか。README.md に一覧）
-├── scripts/                    一回限りの移行スクリプト（migrate_report_md_to_files.py / strip_report_frontmatter.py）
+├── scripts/                    一回限りのスクリプト（移行: migrate_report_md_to_files.py / strip_report_frontmatter.py。一括作成: create_notes.py）
 ├── reports/                    読書レポート・テーマノート・著者ノート（git 管理外。§4）
 ├── Notes App Base Design/      ClaudeDesign から受け取ったデザイン（正本。触らない）
 │   └── design_handoff_notes_reading_app/
@@ -322,6 +322,7 @@ APIが足して返す値: `progress`（読んだ割合％。総ページ未設�
   空白にして出す。Obsidian ではレポート側のバックリンクにテーマノートが出る
 - ハブ `themes/テーマ一覧.md` だけはアプリが作る。全テーマノートと、ノートのまだ無いタグを
   冊数つきで並べる
+- **一括で作る**: いまあるタグのノートは `scripts/create_notes.py` でまとめて作れる（ユーザーが自分の PC で流す。DB と `reports/` が要る）。既定は下見（何も書かない。`.venv/bin/python scripts/create_notes.py 2>&1 | less` で読む）、`--apply` で作る。対象は1冊以上の本に付いたタグ。既にどれかのノートが集めているタグや、ファイル名にできないタグ（`#メモ` など）は作らず理由を出す。本文は空で、マーカーの中の一覧だけ入る。既存のファイルは変えない。編集中・直近に更新されたノートがあるセクションは作らずに待つ（終了コード 1）。→ `docs/design/0003-bulk-create-notes.md`
 - 更新はアプリの起動中に `ThemeWatcher` が5秒ごとに `rebuild()` を呼んで行う（Obsidian で
   ノートを作った・タグを書き換えたといった、API を通らない変化も拾うため）。中身が変わった
   ときだけ書き、直近10秒以内に更新されたノートは書いている最中とみなして次の回に回す。mtime が10秒以上未来のノート（同期のずれなど）は飛ばさずに書く。
@@ -345,6 +346,7 @@ APIが足して返す値: `progress`（読んだ割合％。総ページ未設�
 - **マーカーの中**: 「この著者の本」（レポートのある本は相対リンク）と「関連するテーマ」（同じ本を含むテーマノート）。
 - **ハブ** `authors/著者一覧.md`: アプリが作る。ノートのある著者と、ノートの無い著者（冊数付き）を並べる。
 - **更新と止め方**: `ThemeWatcher` の周期（5秒ごと）に相乗りする。`NOTES_AUTHORS_WATCH=0` で著者ノートだけ止まる（`NOTES_THEMES_WATCH=0` は両方止まる。どちらも `false` / `off` / `no` でもよい）。
+- **一括で作る**: 本棚の全部の本（積読も含む）の著者のノートも、同じ `scripts/create_notes.py` でレポートの有無に関係なくまとめて作れる。テーマと同じく下見と `--apply`、既存のファイルは変えない。上の自動作成の規則（レポートのある著者だけ）は変わらない → `docs/design/0003-bulk-create-notes.md`
 - 分け方の規則・エッジケース・テストは → `docs/design/0002-author-notes.md`
 
 ### Note（引用・メモ）

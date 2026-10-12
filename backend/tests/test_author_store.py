@@ -12,7 +12,8 @@ import unicodedata
 from datetime import date
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from app import author_store, main, report_store, theme_store
 from app.models import Book, BookStatus, Tag
@@ -242,6 +243,18 @@ class TestNoteStem:
     @pytest.mark.parametrize("invisible", ["\u200b", "\u2060", "\u00ad", "\ufeff"])
     def test_drops_invisible_format_characters(self, invisible):
         assert author_store.note_stem(f"{invisible}山田{invisible}太郎{invisible}") == "山田太郎"
+
+    @pytest.mark.parametrize("name, expected", [
+        (". .a", "a"),
+        ("．　．山田", "山田"),     # NFKC で全角のドットと空白が半角になる
+        (".  . .山田. .", "山田"),
+    ])
+    def test_空白をはさんだ先頭と末尾のドットも落として隠しファイルにしない(self, name, expected):
+        # 隠しファイル（.a.md）は scan_notes が見ないので、作ってもその著者はノートが無いままになる
+        stem = author_store.note_stem(name)
+
+        assert stem == expected
+        assert not stem.startswith(".")
 
     @pytest.mark.parametrize("name", [
         "\u200b",          # 書式文字だけ（見えない名前）
@@ -1056,3 +1069,120 @@ class TestLock:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
         thread.join(timeout=5)
         assert "お経の話" in read(note)
+
+
+class TestPlanNewNotes:
+    """書かずに作るノートを決める部分（ウォッチャーの自動作成と、一括作成のスクリプトが使う）。"""
+
+    def plan(self, db, directory, themes=(), **kwargs):
+        books = list(db.scalars(select(Book).options(selectinload(Book.tags)).order_by(Book.id)))
+        return author_store.plan_new_notes(
+            directory, author_store.collect_authors(books), author_store.scan_notes(directory).notes,
+            report_store.report_paths(), list(themes), **kwargs)
+
+    def test_既定ではレポートの無い著者を計画に入れない(self, db, shelf, authors):
+        shelf.add_with_report("お経の話", author="渡辺照宏")
+        shelf.add("言語の起源", author="松浦俊輔")
+
+        plan = self.plan(db, authors)
+
+        assert [p.author.name for p in plan.notes] == ["渡辺照宏"]
+        # レポートが無くて対象から外れた著者は、作らない理由にもしない（ハブに文字で出るだけ）
+        assert plan.skipped == []
+
+    def test_レポートの無い著者も含めると全員を計画に入れる(self, db, shelf, authors):
+        shelf.add_with_report("お経の話", author="渡辺照宏")
+        shelf.add("言語の起源", author="松浦俊輔")
+
+        plan = self.plan(db, authors, include_without_report=True)
+
+        assert [p.author.name for p in plan.notes] == ["松浦俊輔", "渡辺照宏"]
+        assert [p.note.path.name for p in plan.notes] == ["松浦俊輔.md", "渡辺照宏.md"]
+        assert "言語の起源" in plan.notes[0].text
+
+    def test_計画は何も書かない(self, db, shelf, authors):
+        shelf.add_with_report("お経の話", author="渡辺照宏")
+
+        plan = self.plan(db, authors)
+
+        assert len(plan.notes) == 1
+        assert note_names_in(authors) == []
+
+    def test_既に集められている著者はalreadyに入る(self, db, shelf, authors):
+        shelf.add("世界文化小史", author="Ｈ・Ｇ・ウェルズ")
+        shelf.add("言語の起源", author="松浦俊輔")
+        write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ]\n---\n")
+
+        plan = self.plan(db, authors, include_without_report=True)
+
+        assert [a.name for a in plan.already] == ["H・G・ウェルズ"]
+        assert [p.author.name for p in plan.notes] == ["松浦俊輔"]
+
+    @pytest.mark.parametrize("names, files, symlinks, author, reason", [
+        (["★★★"], {}, [], "★★★", "ファイル名にできる文字が無い"),
+        (["著者一覧"], {}, [], "著者一覧", "ファイル名がハブ（著者一覧.md）と同じになる"),
+        # 山田太郎.md は stem の「山田太郎」だけを集める。「山田*太郎」は集めていない
+        (["山田*太郎"], {"山田太郎.md": "# 山田太郎\n"}, [], "山田*太郎",
+         "山田太郎.md が既にあり、この名前を集めていない（そのノートの aliases に足すと集める）"),
+        # ノートとして読まれない壊れた symlink でも、その名前は使えない
+        (["山田太郎"], {}, ["山田太郎.md"], "山田太郎",
+         "山田太郎.md が既にある（著者ノートとして読めないファイル）"),
+        # 山田*太郎 はファイル名にすると山田太郎.md になり、山田太郎という別の著者と見分けがつかなくなる
+        (["山田*太郎", "山田太郎"], {}, [], "山田*太郎",
+         "ファイル名にすると他の著者か既存のノートの名前と見分けがつかない"),
+        # 2人ともファイル名は ab.md になる。先の「a:b」が取り、後の「a?b」は取れない
+        (["a:b", "a?b"], {}, [], "a?b", "ab.md はこの回に「a:b」のノートとして作る"),
+    ])
+    def test_作らない著者には理由を付ける(self, db, shelf, authors, names, files, symlinks, author, reason):
+        for name in names:
+            shelf.add(f"{name}の本", author=name)
+        for filename, text in files.items():
+            write_note(authors, filename, text)
+        for filename in symlinks:
+            os.symlink("存在しない.md", authors / filename)
+
+        plan = self.plan(db, authors, include_without_report=True)
+
+        assert [(a.name, why) for a, why in plan.skipped] == [(author, reason)]
+
+    def test_UTF8でない名前のテーマノートが関連するテーマに入る著者は作らずに理由を出す(
+            self, db, shelf, authors, themes):
+        # UTF-8 でないバイトの名前は、読むとサロゲートの文字になる。一覧のリンクに入ると、書くときに
+        # UnicodeEncodeError で落ちて一時ファイルが残る
+        shelf.add("本1", author="曽村保信", tags=["T"])
+        shelf.add("本2", author="渡辺照宏")
+        bad = os.path.join(os.fsencode(themes), b"caf\xe9.md")
+        try:
+            with open(bad, "wb") as handle:
+                handle.write("---\ntags: [T]\n---\n".encode())
+        except OSError:
+            pytest.skip("このファイルシステムは UTF-8 でない名前のファイルを作れない")
+        books = list(db.scalars(select(Book).options(selectinload(Book.tags))))
+        theme_notes = [(note.path, {b.id for b in theme_store.books_for(note.tags, books)})
+                       for note in theme_store.scan_notes(themes)]
+
+        plan = self.plan(db, authors, theme_notes, include_without_report=True)
+
+        assert [p.author.name for p in plan.notes] == ["渡辺照宏"]
+        assert [(a.name, why) for a, why in plan.skipped] == [("曽村保信", theme_store.UNENCODABLE_REASON)]
+        assert all(theme_store.can_encode(p.text) for p in plan.notes)
+
+
+class TestCreateAfterPlan:
+    def test_計画のあとにできた同名のノートは上書きせず作ったことにもしない(
+            self, db, shelf, authors, monkeypatch):
+        shelf.add_with_report("お経の話", author="渡辺照宏")
+        original = author_store.plan_new_notes
+
+        def plan_then_user_creates_the_note(*args, **kwargs):
+            plan = original(*args, **kwargs)
+            # 計画を立てたあと、ロックを取るまでの間に Obsidian で同じ名前のノートを作った
+            write_note(authors, "渡辺照宏.md", "ユーザーが書いた本文\n")
+            return plan
+
+        monkeypatch.setattr(author_store, "plan_new_notes", plan_then_user_creates_the_note)
+
+        written = rebuild(db)
+
+        assert read(authors / "渡辺照宏.md") == "ユーザーが書いた本文\n"
+        assert authors / "渡辺照宏.md" not in written
