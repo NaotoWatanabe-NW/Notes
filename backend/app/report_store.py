@@ -130,8 +130,7 @@ def build_markdown(book, body: str, extra: Optional[dict] = None) -> str:
     `extra` は既存ファイルの frontmatter。複製項目はアプリの値で上書きし、
     それ以外のキー（ユーザーが足したもの）は複製項目の後ろに元の順で残す。
 
-    値に ":" や改行が入っても壊れないよう yaml.safe_dump で書く。width を無限に
-    するのは、折り返しで "key: value" の形が崩れるのを防ぐため。
+    値に ":" や改行が入っても壊れないよう YAML として書く（`front_matter_text`）。
     """
     meta = {
         "type": REPORT_TYPE,
@@ -150,11 +149,20 @@ def build_markdown(book, body: str, extra: Optional[dict] = None) -> str:
     for key, value in (extra or {}).items():
         if key not in meta:
             meta[key] = value
+    return front_matter_text(meta) + f"\n{body.strip()}\n"
+
+
+def front_matter_text(meta: dict) -> str:
+    """frontmatter（`---` で囲んだ YAML）を、閉じの `---` の後ろの改行まで含めて返す。
+
+    レポートのほか、著者ノートの雛形と移行スクリプトも同じ書き方で書く。
+    width を無限にするのは、折り返しで "key: value" の形が崩れるのを防ぐため。
+    """
     front = yaml.dump(
         meta, Dumper=_ReportDumper, allow_unicode=True, sort_keys=False,
         default_flow_style=False, width=float("inf"),
     ).strip()
-    return f"---\n{front}\n---\n\n{body.strip()}\n"
+    return f"---\n{front}\n---\n"
 
 
 # ── ファイル名 ──────────────────────────────────────────────
