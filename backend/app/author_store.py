@@ -28,6 +28,7 @@
 設計: docs/design/0002-author-notes.md
 """
 
+import logging
 import os
 import re
 import time
@@ -42,6 +43,8 @@ from sqlalchemy.orm import Session, selectinload
 from . import report_store, theme_store
 from .models import Book
 from .theme_store import escape_text, md_link, wrap_block
+
+logger = logging.getLogger(__name__)
 
 AUTHORS_DIRNAME = "authors"
 HUB_NAME = "著者一覧.md"
@@ -291,6 +294,28 @@ def _doubt_of(text: str, meta: dict) -> str:
     return ""
 
 
+# 前の回の doubts と、警告済みの doubts（rebuild はウォッチャーの1スレッドから呼ぶ）
+_seen_doubts: set[tuple[Path, str]] = set()
+_warned_doubts: set[tuple[Path, str]] = set()
+
+
+def _warn_lasting_doubts(doubts: list[tuple[Path, str]]) -> None:
+    """2回続けて残っている怪しいノートを、直るまでに1回だけ警告する。
+
+    書きかけのノートは数秒で直るので黙っていてよいが、frontmatter が壊れたままのノートや
+    先頭が `---`（水平線）のノートは、直すまで自動作成を止め続ける。黙っていると、
+    ノートが作られない理由が分からない。1回だけの doubt（保存の途中など）では警告しない。
+    """
+    current = set(doubts)
+    for path, reason in sorted(current & _seen_doubts - _warned_doubts):
+        logger.warning("著者ノートの自動作成を止めている（直すと次の回で作る）: %s: %s",
+                       path.name, reason)
+    _warned_doubts.intersection_update(current)
+    _warned_doubts.update(current & _seen_doubts)
+    _seen_doubts.clear()
+    _seen_doubts.update(current)
+
+
 def scan_notes(directory: Path) -> NoteScan:
     """`authors/` 直下のノート（ハブと隠しファイルを除く）をファイル名順に読む。
 
@@ -471,6 +496,7 @@ def rebuild(db: Session, *, quiet_seconds: float = theme_store.QUIET_SECONDS,
     reports = report_store.report_paths()
     authors = collect_authors(books)
     scan = scan_notes(directory)   # ディレクトリを開けなければ例外（その回は何も書かない）
+    _warn_lasting_doubts(scan.doubts)
     notes = scan.notes
     # テーマの所属は、著者ごとに books_for を呼び直さないよう1回だけ計算する
     themes = [(t.path, {b.id for b in theme_store.books_for(t.tags, books)})

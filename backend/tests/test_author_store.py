@@ -23,10 +23,15 @@ HUB_NAME = author_store.HUB_NAME
 
 @pytest.fixture(autouse=True)
 def _forget_warned_notes():
-    # 壊れたマーカーの警告済みパスはモジュール変数。テストをまたいで残さない
-    theme_store._warned_broken.clear()
+    # 警告済みのパス（壊れたマーカー・書けなかったファイル・自動作成を止めているノート）は
+    # モジュール変数。テストをまたいで残さない
+    warned = (theme_store._warned_broken, theme_store._warned_write_failed,
+              author_store._seen_doubts, author_store._warned_doubts)
+    for each in warned:
+        each.clear()
     yield
-    theme_store._warned_broken.clear()
+    for each in warned:
+        each.clear()
 
 
 @pytest.fixture
@@ -634,6 +639,33 @@ class TestCreateWaitsForSettledNotes:
         broken.write_text("---\naliases: [H・G・ウェルズ]\n---\n", encoding="utf-8")
         rebuild(db)
         assert note_names_in(authors) == ["ウェルズ.md", "松浦俊輔.md", "渡辺照宏.md"]
+
+    def test_warns_once_about_a_note_that_keeps_stopping_the_creation(self, db, shelf, authors, caplog):
+        # 壊れたままのノートは、直すまで自動作成を止め続ける。黙っていると理由が分からないので、
+        # 2回続けて残っていたら1回だけ警告する（書きかけで数秒だけ壊れている回では警告しない）
+        shelf.add_with_report("お経の話", author="渡辺照宏")
+        broken = write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ, \n---\n")
+
+        def warnings():
+            return [r for r in caplog.records
+                    if r.levelname == "WARNING" and "自動作成を止めている" in r.getMessage()]
+
+        with caplog.at_level("WARNING"):
+            rebuild(db)
+            assert warnings() == []          # 1回だけでは書きかけかもしれない
+            rebuild(db)
+            rebuild(db)
+            assert len(warnings()) == 1
+            assert "ウェルズ.md" in warnings()[0].getMessage()
+
+            broken.write_text("---\naliases: [H・G・ウェルズ]\n---\n", encoding="utf-8")
+            rebuild(db)
+            assert note_names_in(authors) == ["ウェルズ.md", "渡辺照宏.md"]
+
+            broken.write_text("---\naliases: [H・G・ウェルズ, \n---\n", encoding="utf-8")
+            rebuild(db)
+            rebuild(db)
+            assert len(warnings()) == 2      # 直ったあとにまた壊れたら、また1回
 
     def test_a_note_with_a_valid_frontmatter_does_not_make_it_wait(self, db, shelf, authors):
         shelf.add_with_report("お経の話", author="渡辺照宏")
