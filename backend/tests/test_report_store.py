@@ -469,3 +469,32 @@ class TestEmptyBody:
         assert report_store.has_report(4) is False
         path.write_text("---\nbook_id: 4\n---\n\n書いた\n", encoding="utf-8")
         assert report_store.has_report(4) is True
+
+
+class TestFrontMatterWithAnInvalidDate:
+    # YAML としては正しいが日付として不正な値。PyYAML は YAMLError ではなく ValueError を投げる
+    BAD_DATES = ["2026-02-30", "2026-13-01", "0000-01-01"]
+
+    @pytest.mark.parametrize("bad_date", BAD_DATES)
+    def test_one_such_file_does_not_break_the_index(self, reports_dir, bad_date):
+        # 1ファイルのせいで索引が落ちると、本の一覧 API 全体が 500 になる
+        _write_report(reports_dir, "0007-bad-date.md", 7,
+                      extra_front=f"started_on: {bad_date}\n")
+        _write_report(reports_dir, "0008-ok.md", 8)
+
+        assert report_store.book_ids_with_report() == {8}
+
+    @pytest.mark.parametrize("bad_date", BAD_DATES)
+    def test_such_a_file_does_not_count_as_a_report(self, reports_dir, bad_date):
+        # frontmatter が読めない = book_id が分からない、という壊れた frontmatter と同じ扱い
+        _write_report(reports_dir, "0007-bad-date.md", 7,
+                      extra_front=f"started_on: {bad_date}\n")
+
+        assert report_store.has_report(7) is False
+        assert report_store.read(7) is None
+
+    @pytest.mark.parametrize("bad_date", BAD_DATES)
+    def test_split_front_matter_returns_the_whole_text_as_the_body(self, bad_date):
+        text = f"---\nbook_id: 7\nstarted_on: {bad_date}\n---\n\n本文\n"
+
+        assert report_store.split_front_matter(text) == ({}, text)

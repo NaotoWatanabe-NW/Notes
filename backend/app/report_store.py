@@ -87,6 +87,10 @@ def split_front_matter(text: str) -> tuple[dict, str]:
     frontmatter が無い・壊れている・マッピングでない場合は `({}, text)`。
     本文を失わないことを優先する（レポート本文はユーザーが書いた一次データで、
     メタ情報は DB から作り直せる）。先頭に BOM があれば取り除いて解釈する。
+
+    「壊れている」には、YAML としては正しいが日付として不正な値（`started_on: 2026-02-30`
+    など）も含む。PyYAML は timestamp の構築で YAMLError ではなく ValueError を投げる。
+    これを通すと索引まで伝わり、1ファイルのせいで本の一覧が 500 になる。
     """
     text = text.removeprefix("\ufeff")
     match = _FRONT_MATTER_RE.match(text)
@@ -94,7 +98,7 @@ def split_front_matter(text: str) -> tuple[dict, str]:
         return {}, text
     try:
         meta = yaml.safe_load(match.group(1))
-    except yaml.YAMLError:
+    except (yaml.YAMLError, ValueError):
         return {}, text
     if not isinstance(meta, dict):
         return {}, text
@@ -139,7 +143,7 @@ def build_markdown(book, body: str, extra: Optional[dict] = None) -> str:
 def front_matter_text(meta: dict) -> str:
     """frontmatter（`---` で囲んだ YAML）を、閉じの `---` の後ろの改行まで含めて返す。
 
-    レポートのほか、著者ノートの雛形と移行スクリプトも同じ書き方で書く。
+    レポートのほか、著者ノートの雛形も同じ書き方で書く。
     width を無限にするのは、折り返しで "key: value" の形が崩れるのを防ぐため。
     """
     front = yaml.dump(
