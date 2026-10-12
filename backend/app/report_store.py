@@ -17,7 +17,10 @@
 置き場所: `<repo>/reports/<book_id>-<タイトル>.md`（環境変数 `NOTES_REPORTS_DIR` で変更可）
 
 正の鍵は **frontmatter の `book_id`**。ファイル名は人が読むための飾りなので、
-Obsidian で改名されても索引は壊れない（タイトルを直したときはアプリ側が改名する）。
+Obsidian で改名されても索引は壊れない。ファイル名は最初に保存したときのタイトルで決まり、
+あとでタイトルを直しても**アプリは改名しない**。テーマノート（`themes/`）や他のレポートから
+手で張った相対リンクが、アプリの改名で切れないようにするため（Obsidian は自分で改名した
+ときしかリンクを直さない）。
 
 frontmatter の書誌項目（title / author / status / rating / tags …）は、**DB の値を
 ファイル単体で読めるようにするための複製**。正は DB 側で、レポートの保存時と
@@ -27,13 +30,12 @@ frontmatter の書誌項目（title / author / status / rating / tags …）は�
 
 同じ `book_id` のファイルが複数あることがある（Obsidian での複製 "0005-Foo 1.md" など）。
 読み出しに使う「主」は **mtime が最も新しいもの**（同値ならパス名順）で、主を消せば
-残りが繰り上がる。保存は主と target（`filename_for` の名前）以外を上書きも削除もしない。
+残りが繰り上がる。保存は主にしか書かず、他のファイルを上書きも削除もしない。
 本の削除では、id が再利用されても孤児が新しい本に紐づかないよう、その `book_id` を
 持つ全ファイルを対象にする。
 
 消したファイルは unlink せず `reports/.trash/` へ移す（隠しディレクトリなので索引にも
-Obsidian にも出ない）。タイトル変更による改名だけは内容が新しいファイルに引き継がれる
-ので unlink する。
+Obsidian にも出ない）。
 
 書き込みは IdeaPool の reviews と同じ作法:
 
@@ -318,18 +320,27 @@ def has_report(book_id: int) -> bool:
     return bool(candidates) and candidates[0].has_body
 
 
-def book_ids_with_report() -> set[int]:
-    """一覧で使う。本ごとに stat しないよう1回の走査でまとめて返す。"""
+def report_paths() -> dict[int, Path]:
+    """本文が空でないレポートの主のパスを book_id ごとに返す（テーマノートのリンク先）。
+
+    本ごとに stat しないよう1回の走査でまとめて引く。
+    """
     return {
-        book_id for book_id, candidates in _index().entries().items()
+        book_id: candidates[0].path
+        for book_id, candidates in _index().entries().items()
         if candidates[0].has_body
     }
+
+
+def book_ids_with_report() -> set[int]:
+    """一覧で使う。本ごとに stat しないよう1回の走査でまとめて返す。"""
+    return set(report_paths())
 
 
 # ── 書き込み ────────────────────────────────────────────────
 
 @contextmanager
-def _write_lock(directory: Path) -> Iterator[None]:
+def write_lock(directory: Path) -> Iterator[None]:
     directory.mkdir(parents=True, exist_ok=True)
     lock_path = directory / LOCK_NAME
     with open(lock_path, "w") as lock_file:
@@ -348,7 +359,7 @@ def _fsync_dir(directory: Path) -> None:
         os.close(dir_fd)
 
 
-def _write_atomic(path: Path, text: str) -> None:
+def write_atomic(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + TMP_SUFFIX)
     with open(tmp, "w", encoding="utf-8") as handle:
         handle.write(text)
@@ -377,11 +388,11 @@ def _same_except_updated(new_text: str, old_text: str) -> bool:
 
 
 def _save_locked(book, body: Optional[str]) -> Optional[Path]:
-    """`_write_lock` を取った状態で呼ぶ。body が None なら主の本文をそのまま使う。
+    """`write_lock` を取った状態で呼ぶ。body が None なら主の本文をそのまま使う。
 
-    書き先は、主がターゲット名のとき・ターゲット名が空いているときはターゲット、
-    ターゲット名が主以外のファイルで埋まっているときは主（改名をあきらめる）。
-    主も無い新規なら、衝突しない別名にする。主以外のファイルには触れない。
+    既にレポートがあれば主にそのまま書く（タイトルが変わっていても改名しない）。
+    新規なら `filename_for` の名前、それが埋まっていれば衝突しない別名にする。
+    主以外のファイルには触れない。
     """
     directory = reports_dir()
     index = _index()
@@ -400,23 +411,18 @@ def _save_locked(book, body: Optional[str]) -> Optional[Path]:
     if body is None or not body.strip():
         return None
 
-    target = directory / filename_for(book)
-    if current is None:
-        dest = _free_name(directory, target.name) if target.exists() else target
-    elif current == target or not target.exists():
-        dest = target
-    else:
+    if current is not None:
         dest = current
+    else:
+        target = directory / filename_for(book)
+        dest = _free_name(directory, target.name) if target.exists() else target
 
     text = build_markdown(book, body, extra)
-    if dest == current and _same_except_updated(text, current_text):
+    if current is not None and _same_except_updated(text, current_text):
         # エディタは閉じるたびに同じ本文を送ってくる。中身が変わらないのに
         # `updated` と mtime だけ動くと、週次コミットの差分がノイズになる。
         return dest
-    _write_atomic(dest, text)
-    if current is not None and current != dest and current.exists():
-        current.unlink()
-        index.invalidate(current)
+    write_atomic(dest, text)
     index.invalidate(dest)
     return dest
 
@@ -455,15 +461,15 @@ def _delete_locked(book_id: int) -> bool:
 def save(book, body: Optional[str]) -> Optional[Path]:
     """レポート本文を保存する。空文字・None なら削除（ゴミ箱へ）する。
 
-    タイトルが変わっていた場合はファイル名も付け替える（正の鍵は frontmatter の
-    book_id なので、改名に失敗しても本文を失うことはない）。既存ファイルの
-    frontmatter のうち複製項目はアプリの値で上書きし、ユーザーが足したキーは残す。
+    タイトルが変わっていてもファイル名は変えない（手で張ったリンクを切らないため）。
+    既存ファイルの frontmatter のうち複製項目はアプリの値で上書きし、ユーザーが
+    足したキーは残す。
     """
     if body is None or not body.strip():
         delete(book.id)
         return None
 
-    with _write_lock(reports_dir()):
+    with write_lock(reports_dir()):
         return _save_locked(book, body)
 
 
@@ -475,7 +481,7 @@ def refresh_meta(book) -> Optional[Path]:
     本文の読み出しから書き込みまでを1つのロックの中で行う（読んだあとに完了した
     別の保存を古い本文で上書きしないため）。
     """
-    with _write_lock(reports_dir()):
+    with write_lock(reports_dir()):
         return _save_locked(book, None)
 
 
@@ -485,5 +491,5 @@ def delete(book_id: int) -> bool:
     本の削除で id が再利用されたとき、孤児のレポートが新しい本に紐づくのを防ぐため、
     主だけでなく複製も対象にする。
     """
-    with _write_lock(reports_dir()):
+    with write_lock(reports_dir()):
         return _delete_locked(book_id)

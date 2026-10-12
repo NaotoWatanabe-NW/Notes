@@ -123,17 +123,20 @@ class TestSaveAndRead:
         assert meta["rating"] == 4
 
 
-class TestFilenameFollowsTheTitle:
-    def test_renames_the_file_when_the_title_changes(self, reports_dir):
+class TestFilename:
+    def test_keeps_the_file_name_when_the_title_changes(self, reports_dir):
+        # テーマノートなどから手で張ったリンクを、アプリの改名で切らない。
+        # 新しいタイトルは frontmatter に入る。
         book = make_book(title="旧タイトル")
         old = report_store.save(book, "本文")
 
         book.title = "新しいタイトル"
-        new = report_store.save(book, "本文")
+        path = report_store.save(book, "本文")
 
-        assert not old.exists()
-        assert new.name == "0001-新しいタイトル.md"
-        assert report_store.read(1) == "本文"
+        assert path == old
+        assert [p.name for p in reports_dir.glob("*.md")] == ["0001-旧タイトル.md"]
+        meta, _ = report_store.split_front_matter(path.read_text(encoding="utf-8"))
+        assert meta["title"] == "新しいタイトル"
 
     def test_resolves_by_book_id_after_a_manual_rename(self, reports_dir):
         # Obsidian で改名されても、正の鍵は frontmatter の book_id なので追える。
@@ -266,7 +269,7 @@ class TestDuplicateFilesForOneBook:
         ]
 
     def test_save_does_not_overwrite_a_copy_sitting_on_the_target_name(self, reports_dir):
-        # 主は改名後の名前（target）ではない。target を埋めている複製を潰さず主に書く。
+        # 主は filename_for の名前ではない。その名前を埋めている複製を潰さず主に書く。
         primary = _write_report(reports_dir, "手で付けた名前.md", 5, "主の本文", mtime=2_000_000)
         copy = _write_report(reports_dir, "0005-Foo.md", 5, "複製の本文", mtime=1_000_000)
 
@@ -295,19 +298,6 @@ class TestDuplicateFilesForOneBook:
         assert path.name == "0005-Foo-2.md"
         assert "別の本" in other.read_text(encoding="utf-8")
         assert report_store.read(9) == "別の本"
-
-    def test_rename_removes_only_the_old_primary_not_the_copies(self, reports_dir):
-        book = make_book(book_id=5, title="旧")
-        old = report_store.save(book, "本文")
-        copy = _write_report(reports_dir, "0005-旧 1.md", 5, "複製", mtime=1_000_000)
-        os.utime(old, (2_000_000, 2_000_000))
-
-        book.title = "新"
-        new = report_store.save(book, "本文")
-
-        assert not old.exists()
-        assert new.name == "0005-新.md"
-        assert copy.exists()
 
     def test_delete_moves_every_file_with_that_book_id(self, reports_dir):
         _write_report(reports_dir, "0005-Foo.md", 5, "本文", mtime=1_000_000)

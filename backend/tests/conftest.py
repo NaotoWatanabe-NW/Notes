@@ -22,6 +22,9 @@ def _isolated_reports_dir(tmp_path, monkeypatch):
     （I/O がこの機能の本体なのでモックしない）。
     """
     monkeypatch.setenv("NOTES_REPORTS_DIR", str(tmp_path / "reports"))
+    # テーマノートの定期更新は lifespan で始まる。テストは lifespan を動かさないが、
+    # 万一動いても本番の DB を読みに行かないよう止めておく
+    monkeypatch.setenv("NOTES_THEMES_WATCH", "0")
 
 
 @pytest.fixture(autouse=True)

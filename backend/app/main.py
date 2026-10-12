@@ -1,11 +1,13 @@
 """アプリの入口。ここから uvicorn で起動する"""
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from .database import Base, add_missing_columns, engine
+from . import theme_store
+from .database import Base, SessionLocal, add_missing_columns, engine
 from .routers import (
     books, lookup, notes, recommendations, reviews, settings, suggestions, tags, topics,
 )
@@ -25,7 +27,15 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     # 既存のテーブルに後から足した列（create_all では反映されない）
     add_missing_columns(engine)
+    # テーマノート（reports/themes/）の本の一覧を数秒ごとに書き直す。
+    # NOTES_THEMES_WATCH=0 で止められる（一時的にファイルを触らせたくないとき）
+    watcher = None
+    if os.environ.get("NOTES_THEMES_WATCH", "1") != "0":
+        watcher = theme_store.ThemeWatcher(SessionLocal)
+        watcher.start()
     yield
+    if watcher is not None:
+        watcher.stop()
 
 
 app = FastAPI(title="読書ノート API", lifespan=lifespan)
