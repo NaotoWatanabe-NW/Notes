@@ -4,16 +4,26 @@ DB はメモリ上の SQLite、ノートとレポートは実ファイル（I/O 
 書き直しの「直近に更新されたノートは飛ばす」を避けたいテストでは quiet_seconds=0 で呼ぶ。
 """
 
+import logging
 import os
 import threading
 from datetime import date
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import report_store, theme_store
 from app.models import Book, BookStatus, Tag
 from app.theme_store import END, HUB_NAME, START
+
+
+@pytest.fixture(autouse=True)
+def _forget_warned_notes():
+    # 壊れたマーカーの警告済みパスはモジュール変数。テストをまたいで残さない
+    theme_store._warned_broken.clear()
+    yield
+    theme_store._warned_broken.clear()
 
 
 @pytest.fixture
@@ -200,6 +210,76 @@ class TestThemeNote:
         assert "地政学入門" in note.read_text(encoding="utf-8")
 
 
+class TestMarkers:
+    def test_ignores_a_marker_mentioned_inline_and_appends(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学"])
+        original = f"使い方: `{START}` と書くと一覧が入る\n"
+        note = write_note(themes, "地政学.md", original)
+
+        rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert text.startswith(original + "\n" + START + "\n")
+        assert text.count(f"`{START}`") == 1
+        assert "- 地政学入門 — 積読" in text
+
+    def test_ignores_a_marker_pair_inside_a_code_fence_and_appends(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学"])
+        fenced = f"```\n{START}\n例\n{END}\n```\n"
+        note = write_note(themes, "地政学.md", fenced)
+
+        rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert text.startswith(fenced + "\n" + START + "\n")
+        assert "例" in text
+        assert "- 地政学入門 — 積読" in text
+
+    def test_replaces_only_the_real_pair_when_a_fenced_pair_also_exists(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学"])
+        fenced = f"~~~\n{START}\n例\n{END}\n~~~\n"
+        note = write_note(themes, "地政学.md", f"{fenced}\n{START}\n古い一覧\n{END}\n末尾\n")
+
+        rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert text.startswith(fenced + "\n" + START + "\n## このテーマの本")
+        assert "古い一覧" not in text
+        assert text.endswith(f"{END}\n末尾\n")
+        assert "- 地政学入門 — 積読" in text
+
+    def test_does_not_touch_a_note_with_an_unclosed_fence(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学"])
+        original = f"```\nコードの途中\n\n{START}\n古い一覧\n{END}\n"
+        note = write_note(themes, "地政学.md", original)
+
+        rebuild(db)
+
+        assert note.read_text(encoding="utf-8") == original
+
+    def test_accepts_a_marker_line_with_surrounding_spaces(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", f"上\n  {START}  \n古い一覧\n\t{END}\n下\n")
+
+        rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert text.startswith(f"上\n{START}\n## このテーマの本")
+        assert text.endswith(f"{END}\n下\n")
+        assert "古い一覧" not in text
+
+    @pytest.mark.parametrize("fenced", [
+        "````\n```\nSTART\nEND\n````\n",     # 開きより短い ``` では閉じない
+        "~~~\n```\nSTART\nEND\n~~~\n",       # 別の文字（```）では閉じない
+    ])
+    def test_a_fence_is_closed_only_by_the_same_character_and_at_least_the_same_length(self, fenced):
+        text = fenced.replace("START", START).replace("END", END)
+
+        replaced = theme_store.replace_block(text, "新しい一覧")
+
+        assert replaced == text.rstrip() + "\n\n新しい一覧\n"
+
+
 class TestWhenToWrite:
     def test_does_not_rewrite_when_nothing_changed(self, db, shelf, themes):
         shelf.add("地政学入門", tags=["地政学"])
@@ -222,6 +302,55 @@ class TestWhenToWrite:
 
         theme_store.rebuild(db, quiet_seconds=60, now=note.stat().st_mtime + 61)
         assert "地政学入門" in note.read_text(encoding="utf-8")
+
+    def test_warns_once_about_a_note_whose_markers_are_broken(self, db, shelf, themes, caplog):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", f"{START}\n書きかけ\n")
+
+        def warnings():
+            return [r for r in caplog.records
+                    if r.levelno == logging.WARNING and str(note) in r.getMessage()]
+
+        with caplog.at_level(logging.WARNING, logger="app.theme_store"):
+            rebuild(db)
+            rebuild(db)
+            assert len(warnings()) == 1
+
+            # 直ると警告は出ない。一覧が書かれ、警告済みの覚えも外れる
+            note.write_text(f"{START}\n書きかけ\n{END}\n", encoding="utf-8")
+            rebuild(db)
+            assert len(warnings()) == 1
+            assert "地政学入門" in note.read_text(encoding="utf-8")
+
+            # また壊すと、もう1回だけ警告する
+            note.write_text(f"{START}\n{START}\n{END}\n", encoding="utf-8")
+            rebuild(db)
+            rebuild(db)
+            assert len(warnings()) == 2
+
+    def test_writes_a_note_whose_mtime_is_far_in_the_future(self, db, shelf, themes):
+        # 同期のずれで mtime が未来のノートを、永久に飛ばさない
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", "")
+        now = 1_800_000_000.0
+        os.utime(note, (now + 3600, now + 3600))
+
+        written = theme_store.rebuild(db, quiet_seconds=10, now=now)
+
+        assert note in written
+        assert "地政学入門" in note.read_text(encoding="utf-8")
+
+    def test_skips_a_note_whose_mtime_is_just_ahead_of_now(self, db, shelf, themes):
+        # rebuild の途中で保存されたノート（mtime が now より少し先）は、書いている最中とみなす
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", "")
+        now = 1_800_000_000.0
+        os.utime(note, (now + 1, now + 1))
+
+        written = theme_store.rebuild(db, quiet_seconds=10, now=now)
+
+        assert note not in written
+        assert note.read_text(encoding="utf-8") == ""
 
     def test_ignores_hidden_files(self, db, shelf, themes):
         hidden = write_note(themes, ".下書き.md", "")
@@ -295,3 +424,85 @@ class TestReportsAreNotConfusedWithThemes:
 
         assert report_store.has_report(book.id) is False
         assert report_store.book_ids_with_report() == set()
+
+
+class TestWatcher:
+    @pytest.fixture
+    def session_factory(self, db_engine):
+        return lambda: Session(db_engine)
+
+    def test_runs_every_job_with_one_session(self, session_factory):
+        sessions = []
+
+        def first_job(db):
+            sessions.append(("first", db))
+            return []
+
+        def second_job(db):
+            sessions.append(("second", db))
+            return []
+
+        theme_store.ThemeWatcher(session_factory, jobs=[first_job, second_job])._tick()
+
+        assert [name for name, _ in sessions] == ["first", "second"]
+        assert sessions[0][1] is sessions[1][1]
+
+    def test_runs_only_the_theme_rebuild_when_no_jobs_are_given(self, session_factory, tmp_path):
+        theme_store.ThemeWatcher(session_factory)._tick()
+
+        assert (tmp_path / "reports" / "themes" / HUB_NAME).is_file()
+
+    def test_a_failing_job_does_not_stop_the_others(self, session_factory, caplog):
+        calls = []
+        errors = ["同じ失敗", "同じ失敗", "別の失敗"]
+
+        def failing_job(db):
+            # 書きかけのまま失敗したトランザクションを、次のジョブへ持ち越さない確認も兼ねる
+            db.add(Book(title="書きかけの本"))
+            raise RuntimeError(errors.pop(0))
+
+        def healthy_job(db):
+            calls.append(len(db.scalars(select(Book)).all()))
+            return []
+
+        watcher = theme_store.ThemeWatcher(session_factory, jobs=[failing_job, healthy_job])
+        with caplog.at_level(logging.ERROR, logger="app.theme_store"):
+            watcher._tick()
+            watcher._tick()
+            assert len([r for r in caplog.records if r.levelno == logging.ERROR]) == 1
+
+            watcher._tick()
+            assert len([r for r in caplog.records if r.levelno == logging.ERROR]) == 2
+
+        assert calls == [0, 0, 0]
+
+    def test_logs_a_failure_again_after_the_job_recovered(self, session_factory, caplog):
+        outcomes = [RuntimeError("失敗"), None, RuntimeError("失敗")]
+
+        def flaky_job(db):
+            outcome = outcomes.pop(0)
+            if outcome:
+                raise outcome
+            return []
+
+        watcher = theme_store.ThemeWatcher(session_factory, jobs=[flaky_job])
+        with caplog.at_level(logging.ERROR, logger="app.theme_store"):
+            for _ in range(3):
+                watcher._tick()
+
+        assert len([r for r in caplog.records if r.levelno == logging.ERROR]) == 2
+
+    def test_keeps_going_when_the_session_cannot_be_opened(self, caplog):
+        calls = []
+
+        def broken_factory():
+            calls.append(1)
+            raise OSError("開けない")
+
+        watcher = theme_store.ThemeWatcher(broken_factory, jobs=[lambda db: []])
+        with caplog.at_level(logging.ERROR, logger="app.theme_store"):
+            watcher._tick()
+            watcher._tick()
+
+        assert len(calls) == 2
+        assert len([r for r in caplog.records if r.levelno == logging.ERROR]) == 1

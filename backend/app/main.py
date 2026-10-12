@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from . import theme_store
+from . import author_store, theme_store
 from .database import Base, SessionLocal, add_missing_columns, engine
 from .routers import (
     books, lookup, notes, recommendations, reviews, settings, suggestions, tags, topics,
@@ -27,11 +27,15 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     # 既存のテーブルに後から足した列（create_all では反映されない）
     add_missing_columns(engine)
-    # テーマノート（reports/themes/）の本の一覧を数秒ごとに書き直す。
-    # NOTES_THEMES_WATCH=0 で止められる（一時的にファイルを触らせたくないとき）
+    # テーマノート（reports/themes/）と著者ノート（reports/authors/）の一覧を数秒ごとに書き直す。
+    # NOTES_THEMES_WATCH=0 で両方止まる（一時的にファイルを触らせたくないとき）。
+    # NOTES_AUTHORS_WATCH=0 で著者ノートだけ止まる（ノートの自動作成を止めたいとき）
     watcher = None
     if os.environ.get("NOTES_THEMES_WATCH", "1") != "0":
-        watcher = theme_store.ThemeWatcher(SessionLocal)
+        jobs = [theme_store.rebuild]
+        if os.environ.get("NOTES_AUTHORS_WATCH", "1") != "0":
+            jobs.append(author_store.rebuild)
+        watcher = theme_store.ThemeWatcher(SessionLocal, jobs=jobs)
         watcher.start()
     yield
     if watcher is not None:
