@@ -132,8 +132,9 @@ Notes/                          ← git リポジトリのルート
 │   ├── SPEC.md                 このファイル（いまの仕様。正本）
 │   ├── systemd-service.md      母艦の常駐（notes-web）の手順
 │   └── design/                 設計書（なぜそう決めたか。README.md に一覧）
-├── scripts/                    一回限りのスクリプト（移行: migrate_report_md_to_files.py / strip_report_frontmatter.py。一括作成: create_notes.py）
+├── scripts/                    一回限りのスクリプト（移行: strip_report_frontmatter.py / drop_unused_columns.py。一括作成: create_notes.py）
 ├── reports/                    読書レポート・テーマノート・著者ノート（git 管理外。§4）
+├── backup/                     DB の写し（git 管理外。drop_unused_columns.py も消す前にここへ取る）
 ├── Notes App Base Design/      ClaudeDesign から受け取ったデザイン（正本。触らない）
 │   └── design_handoff_notes_reading_app/
 │       ├── README.md           画面仕様。実装で迷ったらここを見る
@@ -284,13 +285,13 @@ sudo tailscale set --operator=$USER   # 以後 sudo なしで ./run.sh serve が
 | total | int \| null | 総ページ数。CHECK > 0 |
 | started_on | date \| null | 読み始めたら今日（JST）を自動設定 |
 | finished_on | date \| null | 読了になったら今日（JST）を自動設定。**戻しても消さない** |
-| ~~report_md~~ | text \| null | 読書レポートの本文。**2026-10-11 にファイルへ移管**（`reports/<book_id>-<タイトル>.md`）。列は凍結コピーとして残っているが、モデルからは外してあるのでアプリは読み書きしない。理由と境界は `Storage/_vault/document-storage-policy.md` |
+| ~~report_md~~ | （削除） | 読書レポートの本文だった列。2026-10-11 にファイル（`reports/<book_id>-<タイトル>.md`）へ移管し、凍結コピーとして残していた。モデルには無く、アプリは読み書きしない。`scripts/drop_unused_columns.py` で DB から消す（消す前の DB は `backup/reading-*.db`）→ `docs/design/0004-drop-unused-columns.md` |
 | created_at / updated_at | datetime | **Python側で JST を入れる**（`default=now_jst`） |
 
 APIが足して返す値: `progress`（読んだ割合％。総ページ未設定なら `null`）、`note_count`、`has_report`。
 **一覧では `report_md` を返さない**（長いため）。詳細だけが返す。
 `report_md` の読み書きは `app/report_store.py` が担い、API の形（`BookDetail.report_md` /
-`BookUpdate.report_md`）は移管の前後で変えていない。
+`BookUpdate.report_md`）は移管の前後で変えていない（名前が残っているだけで、DB の列ではない）。
 
 レポートのファイルは Obsidian（`Storage/Notes/reports` の symlink）から直接編集してよい。
 アプリは毎リクエスト mtime+size で再検証するので、再起動なしで反映される。
@@ -463,7 +464,11 @@ Suggestion が本棚の1冊に紐づくのに対し、こちらは本に紐づ�
   `database.add_missing_columns`（既存のテーブルに無い列を `ALTER TABLE … ADD COLUMN` で足す）を流す
 - **実データが入ったので reading.db はもう作り直さない**（2026-10-03）。足せるのは **null を許す列だけ**。
   null を許さない列を足そうとすると起動時に止まる（既存の行に入れる値が無いため）
-- 列の型変更・削除・null を許さない列の追加が要るようになったら、そのときに Alembic を入れる
+- 列の削除は自動ではしない。不要になった `books.report_md`（レポート本文の凍結コピー）は、一回限りの
+  スクリプト `scripts/drop_unused_columns.py`（SQLite 3.35.5 以上の `ALTER TABLE … DROP COLUMN`）で消す
+  （2026-10-12 に追加。アプリを止めて、ユーザーの PC で一度流す）。
+  `add_missing_columns` はモデルにある列しか足さないので、消した列は起動時に戻らない → `docs/design/0004-drop-unused-columns.md`
+- 列の型変更・削除・null を許さない列の追加が繰り返し要るようになったら Alembic を入れる（先にユーザーに相談）
 
 ### SQLite の接続設定
 
@@ -1048,7 +1053,9 @@ except anthropic.APIConnectionError: error = "APIに接続できませんでし�
 - **外部検索の失敗を「0件」と混同しない**: 国会図書館サーチは叩きすぎると 429 を返し、
   混むとタイムアウトする。これを空配列にすると、画面が「その本はありません」と
   嘘をつく。`SearchUnavailable` を投げて **503** にし、文言を分けた
-- **Alembic をまだ入れない**: 実データが無いうちは「DBを消して作り直す」で足りる。ノートが溜まって消せなくなった時点で導入する
+- **Alembic をまだ入れない**: 列を足すのは `add_missing_columns`、一度きりの列の削除（2026-10-12、`books.report_md`）は
+  一回限りのスクリプトで足りる。Alembic は依存・設定・既存 DB への版の刻印が要り、1回の変更には重い。型変更や削除が
+  繰り返し要るようになったら入れる（先にユーザーに相談）→ `docs/design/0004-drop-unused-columns.md`
 - **レポートの frontmatter に書誌を複製しない**（2026-10-12）: 同じ値が2か所にあると、どちらが正か紛らわしく、本の更新のたびにファイルが動く。持ち主を1か所にし、Obsidian からの導線はテーマノートと著者ノートで作る → `docs/design/0001-storage-boundary.md`
 
 ## 8. 進め方の約束

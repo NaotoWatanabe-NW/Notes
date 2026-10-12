@@ -11,8 +11,9 @@
 
 一方で**書誌・進捗・採点・タグ・引用メモ・提案（books / notes / suggestions）は DB に残す**。
 短い構造化レコードで、SQL の集計と外部キーが効くほうが素直なため。この境界が
-「一部だけファイルに移管した」の意味。`books.report_md` 列は移行後の凍結コピーとして
-残っているが、**アプリはもう読み書きしない**（モデルからも外した）。
+「一部だけファイルに移管した」の意味。移管前に本文を入れていた `books.report_md` 列は
+モデルから外してあり（**アプリは読み書きしない**）、`scripts/drop_unused_columns.py` で DB からも消す
+（`docs/design/0004-drop-unused-columns.md`）。
 
 置き場所: `<repo>/reports/<book_id>-<タイトル>.md`（環境変数 `NOTES_REPORTS_DIR` で変更可）
 

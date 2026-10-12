@@ -42,7 +42,8 @@ Notes/
 │   └── design/                 設計書（§8）
 ├── books.txt                   本のメモ（用途の記載なし。アプリは読まない）
 ├── reports/                    読書レポート・テーマノート・著者ノート（git 管理外。§4）
-├── scripts/                    一回限りのスクリプト（migrate_report_md_to_files.py / strip_report_frontmatter.py / create_notes.py）
+├── backup/                     DB の写し（git 管理外。drop_unused_columns.py も消す前にここへ取る）
+├── scripts/                    一回限りのスクリプト（strip_report_frontmatter.py / create_notes.py / drop_unused_columns.py）
 ├── Notes App Base Design/      デザインの正本（触らない）
 ├── .claude/
 │   ├── agents/                 サブエージェントの定義（§9）
@@ -121,8 +122,8 @@ Notes/
 - リンクは Wikiリンク（`[[ ]]`）ではなく**相対 Markdown リンク**
 - 書き込み: `report_store.write_lock`（flock。`reports/.write.lock`）の中で `write_atomic`（tmp に書く → fsync → `os.replace`）。読み手はロックを取らない
 - 削除はファイルを消さず `reports/.trash/` へ移す
-- **旧い複製キーの移行**: 2026-10-12 より前の版が書いたレポートには、書誌項目（title / author / isbn / genre / status / rating / started_on / finished_on / tags）が frontmatter に残っている。既存ファイルからは `scripts/strip_report_frontmatter.py` で一度だけ取り除く（既定は下見。`--apply` で書く。本文は変えない）。**新しいコードをデプロイして再起動したあとに流す**（先に流すと、旧コードが次の本の更新でキーを書き戻す）。DB の `books.report_md` 列は凍結コピーで、アプリは読み書きしない（消す手順は 0001 §7.4。ユーザーの確認後）
-- `reports/`・`reading.db`・`backend/.env` はコミットしない（`.gitignore`。この repo は public）
+- **旧い複製キーの移行**: 2026-10-12 より前の版が書いたレポートには、書誌項目（title / author / isbn / genre / status / rating / started_on / finished_on / tags）が frontmatter に残っている。既存ファイルからは `scripts/strip_report_frontmatter.py` で一度だけ取り除く（既定は下見。`--apply` で書く。本文は変えない）。**新しいコードをデプロイして再起動したあとに流す**（先に流すと、旧コードが次の本の更新でキーを書き戻す）。DB の `books.report_md` 列（移管前の本文の凍結コピー）は `scripts/drop_unused_columns.py` で消す（アプリを止めて一度だけ流す。既定は下見、`--apply` で消す。手順は `systemctl --user stop notes-web` → 下見（引数なし）→ `--apply` → `systemctl --user start notes-web`。消す前の写しは `backup/`。0004）
+- `reports/`・`reading.db`・`backup/`・`backend/.env` はコミットしない（`.gitignore`。この repo は public）
 
 ## 5. よく使うコマンド
 

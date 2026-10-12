@@ -126,9 +126,9 @@ class Book(Base):
 
     # 読書レポートの本文（Markdown）は **ファイルが正**（2026-10-11 に移管）。
     # app/report_store.py が reports/<book_id>-<タイトル>.md を読み書きする。
-    # 旧 report_md 列は移行前の凍結コピーとして DB に残っているが、ここでマップ
-    # しないことで「アプリからは読み書きしない」を構造的に保証している
-    # （SQLite の列削除は add_missing_columns() の範囲外なので列自体は消さない）。
+    # 移管前に本文を入れていた report_md 列は、凍結コピーとして残したあと
+    # scripts/drop_unused_columns.py で DB から消す（docs/design/0004-drop-unused-columns.md）。
+    # 消す前の DB に列が残っていても、ここでマップしないのでアプリは読み書きしない。
     # 理由と境界: Storage/_vault/document-storage-policy.md
 
     # 時刻は SQLite の CURRENT_TIMESTAMP（UTC）ではなく Python 側の JST を使う。

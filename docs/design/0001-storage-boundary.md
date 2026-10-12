@@ -378,6 +378,8 @@ LEGACY_KEYS = ("title", "author", "isbn", "genre", "status", "rating",
 5. `scripts/migrate_report_md_to_files.py` を削除する（列が無いと動かない）。`models.py` の凍結コピーの
    コメントと SPEC の `~~report_md~~` の行を「削除済み（日付）」に直す。
 
+**追記（2026-10-12）**: ユーザーの確認が取れたので列を消す。上の手順 2〜5 は [0004](0004-drop-unused-columns.md) の `scripts/drop_unused_columns.py` 1本に置き換えた（アプリを止めて排他ロックを取ってから写しを取る。「ファイルなし」の確認はスクリプトの中で行う。`migrate_report_md_to_files.py` は削除した）。
+
 ### 7.5 トレードオフ（正直に）
 
 失うもの:
@@ -452,7 +454,7 @@ LEGACY_KEYS = ("title", "author", "isbn", "genre", "status", "rating",
 
 ## 9. 未決事項
 
-- `books.report_md` 列を消すか（§7.4。ユーザーの確認待ち）。
+- `books.report_md` 列を消すか（§7.4。ユーザーの確認待ち）。→ **解決（2026-10-12）**: 消す。手順は [0004](0004-drop-unused-columns.md)。
 - Dataview などで書誌を引きたくなった場合の受け皿。案: ビューとして書誌の一覧ファイル（例:
   `reports/本の一覧.md` のマーカー内に表）を作る。今回は作らない。
 - `Storage/_vault/document-storage-policy.md`（リポジトリ外）への反映。「レポートの frontmatter は

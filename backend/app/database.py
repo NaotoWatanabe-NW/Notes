@@ -43,7 +43,10 @@ def add_missing_columns(target_engine) -> list[str]:
     DB には反映されない。実データが入っていて reading.db を作り直せないため、
     SQLite がその場でできる ADD COLUMN だけをここで行う。
     足せるのは null を許す列だけ（既存の行に入れる値が無いため）。
-    列の型変更・削除が要るようになったら Alembic を入れる。
+    モデルに無い列は足さないので、消した列が起動時に戻ることはない。
+    列の型変更・削除はここではしない。不要になった `books.report_md` は一回限りのスクリプトで消した
+    （`scripts/drop_unused_columns.py`、docs/design/0004）。型変更・削除が繰り返し要るようになったら
+    Alembic を入れる（先にユーザーに相談）。
     """
     added = []
     with target_engine.begin() as conn:
