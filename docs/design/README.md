@@ -66,3 +66,4 @@
 | [0001](0001-storage-boundary.md) | DB と Markdown の境界（同じデータを2か所に保存しない） | 実装済み（2026-10-12） | 2026-10-12 |
 | [0002](0002-author-notes.md) | 著者ノート（`reports/authors/`）と、ノートへの差し込みの共通修正 | 実装済み（2026-10-12） | 2026-10-12 |
 | [0003](0003-bulk-create-notes.md) | テーマノート・著者ノートの一括作成（`scripts/create_notes.py`） | 実装済み（2026-10-12） | 2026-10-12 |
+| [0004](0004-drop-unused-columns.md) | DB の不要な列を消す（`books.report_md`。`scripts/drop_unused_columns.py`） | 採用（未実装） | 2026-10-12 |
