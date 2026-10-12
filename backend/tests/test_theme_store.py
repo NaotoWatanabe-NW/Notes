@@ -4,10 +4,12 @@ DB はメモリ上の SQLite、ノートとレポートは実ファイル（I/O 
 書き直しの「直近に更新されたノートは飛ばす」を避けたいテストでは quiet_seconds=0 で呼ぶ。
 """
 
+import functools
 import logging
 import os
 import threading
 from datetime import date
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -20,10 +22,12 @@ from app.theme_store import END, HUB_NAME, START
 
 @pytest.fixture(autouse=True)
 def _forget_warned_notes():
-    # 壊れたマーカーの警告済みパスはモジュール変数。テストをまたいで残さない
+    # 壊れたマーカー・書き込み失敗の警告済みパスはモジュール変数。テストをまたいで残さない
     theme_store._warned_broken.clear()
+    theme_store._warned_write_failed.clear()
     yield
     theme_store._warned_broken.clear()
+    theme_store._warned_write_failed.clear()
 
 
 @pytest.fixture
@@ -257,9 +261,10 @@ class TestMarkers:
 
         assert note.read_text(encoding="utf-8") == original
 
-    def test_accepts_a_marker_line_with_surrounding_spaces(self, db, shelf, themes):
+    def test_accepts_a_marker_line_with_up_to_three_leading_spaces_and_trailing_whitespace(
+            self, db, shelf, themes):
         shelf.add("地政学入門", tags=["地政学"])
-        note = write_note(themes, "地政学.md", f"上\n  {START}  \n古い一覧\n\t{END}\n下\n")
+        note = write_note(themes, "地政学.md", f"上\n  {START}  \n古い一覧\n   {END}\t\n下\n")
 
         rebuild(db)
 
@@ -278,6 +283,190 @@ class TestMarkers:
         replaced = theme_store.replace_block(text, "新しい一覧")
 
         assert replaced == text.rstrip() + "\n\n新しい一覧\n"
+
+
+# ユーザーが例として書いたマーカー（またはマーカーに見える行）を含むノートの断片。
+# どれも「閉じ済み」で、マーカーの組は本物ではない。壊れた入力ではなく、普通に書かれうる書き方。
+_EXAMPLE_NOTES = {
+    "tab_indented_markers": f"本文\n\n\t{START}\n\t例の一覧\n\t{END}\n\n後半\n",
+    "four_space_indented_markers": f"本文\n\n    {START}\n    例の一覧\n    {END}\n\n後半\n",
+    # Obsidian の既定ではリスト内のコードブロックはタブ字下げ
+    "tab_indented_fence_in_a_list": f"- 例:\n\t```\n\t{START}\n\t例の一覧\n\t{END}\n\t```\n",
+    # 字下げの無いマーカー行は、フェンスを見落とすと本物と取り違える
+    "markers_inside_a_tab_indented_fence": f"- 例:\n\t```\n{START}\n例の一覧\n{END}\n\t```\n",
+    "fence_opened_on_the_list_marker_line":
+        f"- ```\n  {START}\n  例の一覧\n  {END}\n  ```\n- ```bash\n  ls\n  ```\n",
+    "fence_in_an_ordered_list": f"1. ```\n   {START}\n   例の一覧\n   {END}\n   ```\n",
+    "fence_in_a_nested_list_with_8_spaces":
+        f"- 親\n    - 子:\n        ```\n        {START}\n        例の一覧\n        {END}\n        ```\n",
+    "fence_inside_nested_blockquotes": f"> > ```\n{START}\n例の一覧\n{END}\n> > ```\n",
+    # "```js```" は文中のコードで、フェンスの開きではない（開きと取り違えると、次の本物の
+    # フェンスの開きと閉じが逆になり、中のマーカーが外に出る）
+    "backticks_in_the_info_string_is_not_a_fence":
+        f"```js``` と ```py``` の違い\n\n```\n{START}\n例の一覧\n{END}\n```\n\n```python\nx = 1\n```\n",
+    # チルダのフェンスは info 文字列にバッククォートがあってもフェンス
+    "tilde_fence_with_a_backtick_in_the_info_string": f"~~~ a`b\n{START}\n例の一覧\n{END}\n~~~\n",
+    "markers_inside_a_multi_line_html_comment": f"<!--\n{START}\n例の一覧\n{END}\n-->\n",
+    # コメントの中の ``` はフェンスの開きではない（開きと取り違えると閉じていないフェンスになる）
+    "fence_inside_a_multi_line_html_comment": "<!--\n```\nコメントアウトしたコード\n-->\n本文\n",
+}
+_REAL_BLOCK = f"{START}\n古い一覧\n{END}"
+
+
+@pytest.mark.parametrize("example", _EXAMPLE_NOTES.values(), ids=_EXAMPLE_NOTES.keys())
+class TestMarkersInsideCodeBlocks:
+    def test_appends_the_list_after_the_example_and_changes_nothing_the_next_time(
+            self, db, shelf, themes, example):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", example)
+
+        written = rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert note in written
+        assert text.startswith(example + "\n" + START + "\n## このテーマの本")
+        assert text.endswith(END + "\n")
+        assert text.count(START) == example.count(START) + 1
+        assert "- 地政学入門 — 積読" in text
+
+        assert note not in rebuild(db)
+        assert note.read_text(encoding="utf-8") == text
+
+    def test_replaces_only_the_real_pair_after_the_example(self, db, shelf, themes, example):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", f"{example}\n{_REAL_BLOCK}\n末尾\n")
+
+        written = rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert note in written
+        assert text.startswith(example + "\n" + START + "\n## このテーマの本")
+        assert text.endswith(f"{END}\n末尾\n")
+        assert "古い一覧" not in text
+        assert "- 地政学入門 — 積読" in text
+
+        assert note not in rebuild(db)
+        assert note.read_text(encoding="utf-8") == text
+
+
+class TestUnclosedCodeBlocks:
+    @pytest.mark.parametrize("original", [
+        f"- ```\n  メモ\n\n{START}\n古い一覧\n{END}\n",         # リストの行で開いたフェンスが閉じない
+        f"\t```\n{START}\n古い一覧\n{END}\n",                   # タブ字下げのフェンスが閉じない
+        f"<!--\n下書き\n\n{START}\n古い一覧\n{END}\n",           # コメントが閉じない
+        "```js\nコードの途中\n",
+    ], ids=["list_fence", "tab_fence", "html_comment", "fence_without_markers"])
+    def test_does_not_touch_a_note_with_something_left_open(self, db, shelf, themes, original):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", original)
+
+        written = rebuild(db)
+
+        assert note not in written
+        assert note.read_text(encoding="utf-8") == original
+
+    def test_a_one_line_html_comment_does_not_hide_what_follows(self, db, shelf, themes):
+        # 1行で閉じたコメント（マーカー自身も1行のコメント）は、複数行コメントの開きではない
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", f"<!-- メモ -->\n{_REAL_BLOCK}\n末尾\n")
+
+        rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert text.startswith(f"<!-- メモ -->\n{START}\n## このテーマの本")
+        assert "古い一覧" not in text
+        assert "- 地政学入門 — 積読" in text
+
+
+class TestAppendingKeepsTheEndOfTheUsersText:
+    def test_keeps_the_trailing_spaces_that_make_a_markdown_line_break(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", "# 地政学\n\n最後の行  \n\n \n\n")
+
+        rebuild(db)
+
+        assert note.read_text(encoding="utf-8").startswith("# 地政学\n\n最後の行  \n\n" + START + "\n")
+
+    def test_drops_only_trailing_blank_lines_when_the_note_is_blank(self):
+        assert theme_store.replace_block("  \n\n", "一覧") == "一覧\n"
+
+
+class TestLineBreaksInTitlesAndAuthors:
+    @pytest.mark.parametrize("raw", [
+        "\n", "\r", "\r\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", " ", " ",
+    ], ids=["LF", "CR", "CRLF", "VT", "FF", "FS", "GS", "RS", "NEL", "LS", "PS"])
+    def test_escape_text_turns_a_line_break_into_one_space(self, raw):
+        assert theme_store.escape_text(f"上{raw}下") == "上 下"
+        assert len(theme_store.escape_text(f"上{raw}{raw}下").splitlines()) == 1
+
+    def test_escape_text_escapes_the_tilde_that_would_open_a_fence_at_the_head_of_a_list_item(self):
+        assert theme_store.escape_text("~~~ 巻末") == r"\~\~\~ 巻末"
+
+    @pytest.mark.parametrize("title, author", [
+        ("本A\n~~~", "著者"),
+        ("本A\r\n下巻", "著者"),
+        ("本A", "著者\r"),
+        ("本A", "著者\n~~~"),
+        ("本A \x85下巻", "著者"),
+        ("本A\n- 本物のようで偽の本", "著者"),
+    ])
+    def test_a_title_or_author_with_line_breaks_stays_one_list_line_and_does_not_stop_the_note(
+            self, db, shelf, themes, title, author):
+        shelf.add(title, author=author, tags=["仏教"])
+        note = write_note(themes, "仏教.md", "# 仏教\n\n自分のメモ\n")
+
+        written = rebuild(db)
+
+        text = note.read_text(encoding="utf-8")
+        assert note in written
+        assert text.startswith("# 仏教\n\n自分のメモ\n\n" + START)
+        assert len([l for l in text.split("\n") if l.startswith("- ")]) == 1
+        # 2回目は何も書かない（CR が残っていると、読み戻した内容が毎回違って見える）
+        assert note not in rebuild(db)
+        assert note.read_text(encoding="utf-8") == text
+
+        # 以後も更新が止まらない（開きっぱなしのフェンスで END が隠れていない）
+        shelf.add("本B", tags=["仏教"])
+        assert note in rebuild(db)
+        assert "- 本B — 積読" in note.read_text(encoding="utf-8")
+
+
+class TestSelfCheckBeforeWriting:
+    def test_does_not_write_a_block_that_would_open_a_fence_and_warns_once(self, caplog):
+        path = Path("/notes/仏教.md")
+        original = "# 仏教\n\n自分のメモ\n"
+        bad = theme_store.wrap_block(["- 本A", "~~~", "- 本B"])    # END が開きっぱなしのフェンスに隠れる
+        good = theme_store.wrap_block(["- 本A"])
+
+        with caplog.at_level(logging.WARNING, logger="app.theme_store"):
+            assert theme_store.fill_block(path, original, bad) is None
+            assert theme_store.fill_block(path, original, bad) is None
+            assert len(caplog.records) == 1
+            assert str(path) in caplog.records[0].getMessage()
+
+            # 直れば書ける。警告済みの覚えも外れ、また壊れたらもう1回警告する
+            assert theme_store.fill_block(path, original, good) == f"{original}\n{good}\n"
+            assert theme_store.fill_block(path, original, bad) is None
+            assert len(caplog.records) == 2
+
+    def test_does_not_write_a_block_that_opens_an_html_comment(self):
+        block = theme_store.wrap_block(["<!-- 閉じ忘れ"])
+        assert theme_store.fill_block(Path("/notes/仏教.md"), "メモ\n", block) is None
+
+    def test_leaves_a_note_alone_when_its_tag_would_open_a_fence_in_the_list(self, db, shelf, themes, caplog):
+        # 集めるタグはコメントの行に生で書く。frontmatter のタグに改行があると、その次の行が
+        # コメントの外に出て、フェンスを開いてしまう
+        original = '---\ntags: ["a -->\\n~~~"]\n---\n自分のメモ\n'
+        note = write_note(themes, "仏教.md", original)
+
+        with caplog.at_level(logging.WARNING, logger="app.theme_store"):
+            written = rebuild(db)
+            rebuild(db)
+
+        assert note not in written
+        assert note.read_text(encoding="utf-8") == original
+        assert (themes / HUB_NAME).is_file()      # 他のノートやハブは書かれる
+        assert len([r for r in caplog.records if str(note) in r.getMessage()]) == 1
 
 
 class TestWhenToWrite:
@@ -374,6 +563,159 @@ class TestWhenToWrite:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
         thread.join(timeout=5)
         assert "地政学入門" in note.read_text(encoding="utf-8")
+
+
+class TestConcurrentEditsInObsidian:
+    # Obsidian はロックを取らないので、アプリが読んでから置き換えるまでの間にも保存しうる。
+    # その瞬間を、write_atomic の呼び出しの手前で書き換えて再現する。
+
+    @staticmethod
+    def edit_once_before_writing(monkeypatch, target, edit):
+        write_atomic = report_store.write_atomic
+        edited = []
+
+        def write_after_the_user_saved(path, text, **kwargs):
+            if path == target and not edited:
+                edited.append(True)
+                edit()
+            return write_atomic(path, text, **kwargs)
+
+        monkeypatch.setattr(report_store, "write_atomic", write_after_the_user_saved)
+
+    def test_keeps_a_paragraph_the_user_saved_after_the_note_was_read(self, db, shelf, themes, monkeypatch):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", "# 地政学\n\n古いメモ\n")
+        saved = "# 地政学\n\n古いメモ\n\nいま書いた大事な段落\n"
+        self.edit_once_before_writing(monkeypatch, note, lambda: note.write_text(saved, encoding="utf-8"))
+
+        written = rebuild(db)
+
+        assert note not in written
+        assert note.read_text(encoding="utf-8") == saved
+        assert not list(themes.glob("*.tmp"))
+
+        # 次の回は、保存された段落を残したまま一覧を足す
+        assert note in rebuild(db)
+        text = note.read_text(encoding="utf-8")
+        assert text.startswith(saved + "\n" + START)
+        assert "- 地政学入門 — 積読" in text
+
+    def test_keeps_a_note_the_user_saved_with_the_same_length_by_its_mtime(self, db, shelf, themes, monkeypatch):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", "メモA\n")
+
+        def save_same_size():
+            note.write_text("メモB\n", encoding="utf-8")
+            stat = note.stat()
+            os.utime(note, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+
+        self.edit_once_before_writing(monkeypatch, note, save_same_size)
+
+        assert note not in rebuild(db)
+        assert note.read_text(encoding="utf-8") == "メモB\n"
+
+    def test_does_not_bring_back_a_note_the_user_deleted_meanwhile(self, db, shelf, themes, monkeypatch):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", "")
+        self.edit_once_before_writing(monkeypatch, note, note.unlink)
+
+        assert note not in rebuild(db)
+        assert not note.exists()
+
+    def test_does_not_overwrite_a_hub_the_user_created_meanwhile(self, db, shelf, themes, monkeypatch):
+        hub = themes / HUB_NAME
+        mine = "# 自分で作ったテーマ一覧\n"
+        self.edit_once_before_writing(monkeypatch, hub, lambda: hub.write_text(mine, encoding="utf-8"))
+
+        assert hub not in rebuild(db)
+        assert hub.read_text(encoding="utf-8") == mine
+        assert not list(themes.glob("*.tmp"))
+
+        # 次の回は、ユーザーのハブに一覧を足す
+        assert hub in rebuild(db)
+        assert hub.read_text(encoding="utf-8").startswith(mine + "\n" + START)
+
+
+class TestScanNotes:
+    def test_skips_only_the_entry_it_cannot_inspect(self, themes):
+        write_note(themes, "あ.md", "")
+        write_note(themes, "う.md", "")
+        os.symlink("い.md", themes / "い.md")                       # 自分を指す（ELOOP）
+        os.symlink("存在しない.md", themes / "え.md")               # 先が無い
+
+        assert [note.path.name for note in theme_store.scan_notes(themes)] == ["あ.md", "う.md"]
+
+    def test_other_notes_and_the_hub_are_still_written_next_to_a_broken_symlink(self, db, shelf, themes):
+        shelf.add("地政学入門", tags=["地政学"])
+        note = write_note(themes, "地政学.md", "")
+        os.symlink("loop.md", themes / "loop.md")
+
+        written = rebuild(db)
+
+        assert note in written
+        assert "- 地政学入門 — 積読" in note.read_text(encoding="utf-8")
+        assert themes / HUB_NAME in written
+
+    def test_a_missing_directory_has_no_notes(self, tmp_path):
+        assert theme_store.scan_notes(tmp_path / "無い") == []
+
+    def test_raises_when_the_directory_cannot_be_read(self, tmp_path):
+        # 「ノート0件」ではなく失敗にする（ウォッチャーが記録して、その回は何も書かない）
+        not_a_directory = tmp_path / "themes"
+        not_a_directory.write_text("", encoding="utf-8")
+
+        with pytest.raises(OSError):
+            theme_store.scan_notes(not_a_directory)
+
+
+class TestOneFailureDoesNotStopTheJob:
+    def make_unwritable(self, note):
+        # tmp の名前をディレクトリで塞ぐと、その1ファイルだけ書き込みに失敗する
+        (note.parent / (note.name + report_store.TMP_SUFFIX)).mkdir()
+
+    def test_writes_the_other_notes_and_the_hub_and_warns_once(self, db, shelf, themes, caplog):
+        shelf.add("本", tags=["あ", "い", "う"])
+        first = write_note(themes, "あ.md", "")
+        broken = write_note(themes, "い.md", "")
+        last = write_note(themes, "う.md", "")
+        self.make_unwritable(broken)
+
+        def warnings():
+            return [r for r in caplog.records
+                    if r.levelno == logging.WARNING and str(broken) in r.getMessage()]
+
+        with caplog.at_level(logging.WARNING, logger="app.theme_store"):
+            written = rebuild(db)
+            rebuild(db)
+
+        assert set(written) == {first, last, themes / HUB_NAME}
+        assert broken.read_text(encoding="utf-8") == ""
+        assert len(warnings()) == 1
+
+        # 直れば次の回で書ける。警告済みの覚えも外れ、また書けなくなればもう1回警告する
+        (themes / "い.md.tmp").rmdir()
+        with caplog.at_level(logging.WARNING, logger="app.theme_store"):
+            assert broken in rebuild(db)
+            assert len(warnings()) == 1
+
+            broken.write_text("", encoding="utf-8")
+            self.make_unwritable(broken)
+            rebuild(db)
+            rebuild(db)
+            assert len(warnings()) == 2
+
+    def test_does_not_count_a_skipped_note_as_recovered(self, db, shelf, themes, caplog):
+        # 書いている最中として飛ばした回は、書き込みを試していない。警告済みの覚えを外さない
+        shelf.add("本", tags=["い"])
+        broken = write_note(themes, "い.md", "")
+        self.make_unwritable(broken)
+
+        with caplog.at_level(logging.WARNING, logger="app.theme_store"):
+            rebuild(db)
+            theme_store.rebuild(db, quiet_seconds=60)      # 直近に更新されたので飛ばす
+            rebuild(db)
+
+        assert len([r for r in caplog.records if str(broken) in r.getMessage()]) == 1
 
 
 class TestHub:
@@ -505,4 +847,41 @@ class TestWatcher:
             watcher._tick()
 
         assert len(calls) == 2
+        assert len([r for r in caplog.records if r.levelno == logging.ERROR]) == 1
+
+    def test_a_job_without_a_name_does_not_stop_the_others(self, session_factory):
+        # functools.partial は __name__ を持たない。名前づくりで落ちて、後ろのジョブまで止めない
+        calls = []
+
+        def labeled_job(db, label):
+            calls.append(label)
+            return []
+
+        def plain_job(db):
+            calls.append("plain")
+            return []
+
+        watcher = theme_store.ThemeWatcher(
+            session_factory, jobs=[functools.partial(labeled_job, label="partial"), plain_job])
+        watcher._tick()
+
+        assert calls == ["partial", "plain"]
+
+    def test_logs_a_failing_job_without_a_name_once_and_keeps_going(self, session_factory, caplog):
+        calls = []
+
+        def failing_job(db, label):
+            raise RuntimeError("同じ失敗")
+
+        def healthy_job(db):
+            calls.append("healthy")
+            return []
+
+        watcher = theme_store.ThemeWatcher(
+            session_factory, jobs=[functools.partial(failing_job, label="partial"), healthy_job])
+        with caplog.at_level(logging.ERROR, logger="app.theme_store"):
+            watcher._tick()
+            watcher._tick()
+
+        assert calls == ["healthy", "healthy"]
         assert len([r for r in caplog.records if r.levelno == logging.ERROR]) == 1

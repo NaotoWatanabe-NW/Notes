@@ -471,6 +471,19 @@ class TestEmptyBody:
         assert report_store.has_report(4) is True
 
 
+class TestBrokenSymlinkInTheReportsDirectory:
+    def test_other_reports_stay_visible_next_to_a_symlink_that_points_to_itself(self, reports_dir):
+        # 自分を指す symlink は is_file() が ELOOP で例外を出す。1つのせいで索引が空になると、
+        # 全レポートが「無い」ことになり、次の保存で同じ本のレポートが2つ目として作られてしまう
+        _write_report(reports_dir, "0008-ok.md", 8, body="残っている本文")
+        (reports_dir / "loop.md").symlink_to("loop.md")
+
+        assert report_store.book_ids_with_report() == {8}
+        assert report_store.read(8) == "残っている本文"
+        path = report_store.save(make_book(book_id=8, title="別のタイトル"), "書き直した本文")
+        assert path == reports_dir / "0008-ok.md"
+
+
 class TestFrontMatterWithAnInvalidDate:
     # YAML としては正しいが日付として不正な値。PyYAML は YAMLError ではなく ValueError を投げる
     BAD_DATES = ["2026-02-30", "2026-13-01", "0000-01-01"]
@@ -498,3 +511,135 @@ class TestFrontMatterWithAnInvalidDate:
         text = f"---\nbook_id: 7\nstarted_on: {bad_date}\n---\n\n本文\n"
 
         assert report_store.split_front_matter(text) == ({}, text)
+
+
+class TestWriteAtomicExpect:
+    """`expect`: ロックを取らない書き手（Obsidian）の保存を消さない条件付きの置き換え。
+
+    競合は、tmp を書いて fsync している間に相手が保存した、という形で再現する
+    （fsync を差し替えて、その1回目の中で相手の保存を入れる）。
+    """
+
+    @staticmethod
+    def act_while_syncing(monkeypatch, action):
+        fsync = os.fsync
+        acted = []
+
+        def fsync_after_someone_saved(fd):
+            fsync(fd)
+            if not acted:
+                acted.append(True)
+                action()
+
+        monkeypatch.setattr(os, "fsync", fsync_after_someone_saved)
+
+    @staticmethod
+    def key(path):
+        stat = path.stat()
+        return stat.st_mtime_ns, stat.st_size
+
+    def test_replaces_the_file_when_it_is_as_expected(self, tmp_path):
+        path = tmp_path / "a.md"
+        path.write_text("古い", encoding="utf-8")
+
+        assert report_store.write_atomic(path, "新しい", expect=self.key(path)) is True
+
+        assert path.read_text(encoding="utf-8") == "新しい"
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_replaces_unconditionally_without_expect(self, tmp_path):
+        path = tmp_path / "a.md"
+        path.write_text("古い", encoding="utf-8")
+
+        assert report_store.write_atomic(path, "新しい") is True
+
+        assert path.read_text(encoding="utf-8") == "新しい"
+
+    def test_does_not_replace_a_file_saved_while_it_was_being_written(self, tmp_path, monkeypatch):
+        path = tmp_path / "a.md"
+        path.write_text("古い", encoding="utf-8")
+        expect = self.key(path)
+        self.act_while_syncing(monkeypatch, lambda: path.write_text("古い\n\nいま書いた段落", encoding="utf-8"))
+
+        assert report_store.write_atomic(path, "新しい", expect=expect) is False
+
+        assert path.read_text(encoding="utf-8") == "古い\n\nいま書いた段落"
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_notices_a_save_of_the_same_size_by_its_mtime(self, tmp_path, monkeypatch):
+        path = tmp_path / "a.md"
+        path.write_text("AAAA", encoding="utf-8")
+        expect = self.key(path)
+
+        def save_same_size():
+            path.write_text("BBBB", encoding="utf-8")
+            stat = path.stat()
+            os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+
+        self.act_while_syncing(monkeypatch, save_same_size)
+
+        assert report_store.write_atomic(path, "CCCC", expect=expect) is False
+        assert path.read_text(encoding="utf-8") == "BBBB"
+
+    def test_does_not_bring_back_a_file_deleted_while_it_was_being_written(self, tmp_path, monkeypatch):
+        path = tmp_path / "a.md"
+        path.write_text("古い", encoding="utf-8")
+        expect = self.key(path)
+        self.act_while_syncing(monkeypatch, path.unlink)
+
+        assert report_store.write_atomic(path, "新しい", expect=expect) is False
+
+        assert not path.exists()
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_removes_the_tmp_file_when_the_replace_itself_fails(self, tmp_path, monkeypatch):
+        path = tmp_path / "a.md"
+        path.write_text("古い", encoding="utf-8")
+
+        def failing_replace(src, dst):
+            raise PermissionError("置き換えられない")
+
+        monkeypatch.setattr(os, "replace", failing_replace)
+
+        with pytest.raises(PermissionError):
+            report_store.write_atomic(path, "新しい", expect=self.key(path))
+
+        assert path.read_text(encoding="utf-8") == "古い"
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_absent_creates_a_new_file_and_leaves_no_tmp_link_behind(self, tmp_path):
+        path = tmp_path / "a.md"
+
+        assert report_store.write_atomic(path, "新規", expect=report_store.ABSENT) is True
+
+        assert path.read_text(encoding="utf-8") == "新規"
+        assert path.stat().st_nlink == 1
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_absent_does_not_overwrite_a_file_created_while_it_was_being_written(self, tmp_path, monkeypatch):
+        path = tmp_path / "a.md"
+        self.act_while_syncing(monkeypatch, lambda: path.write_text("ユーザーが作った", encoding="utf-8"))
+
+        assert report_store.write_atomic(path, "新規", expect=report_store.ABSENT) is False
+
+        assert path.read_text(encoding="utf-8") == "ユーザーが作った"
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_absent_does_not_overwrite_a_file_that_already_exists(self, tmp_path):
+        path = tmp_path / "a.md"
+        path.write_text("既にある", encoding="utf-8")
+
+        assert report_store.write_atomic(path, "新規", expect=report_store.ABSENT) is False
+
+        assert path.read_text(encoding="utf-8") == "既にある"
+
+    def test_absent_does_not_write_through_a_dangling_symlink(self, tmp_path):
+        path = tmp_path / "a.md"
+        target = tmp_path / "別の場所.md"
+        os.symlink(target, path)
+
+        assert report_store.write_atomic(path, "新規", expect=report_store.ABSENT) is False
+
+        assert not target.exists()
+        assert path.is_symlink()
+        assert list(tmp_path.glob("*.tmp")) == []

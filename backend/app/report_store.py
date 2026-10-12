@@ -56,7 +56,7 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Union
 
 import yaml
 
@@ -215,9 +215,17 @@ class _ReportIndex:
 
     def _refresh(self) -> dict[int, list[_Entry]]:
         with self._lock:
+            entries = []
             try:
                 with os.scandir(self._directory) as it:
-                    entries = [e for e in it if e.is_file() and e.name.endswith(".md")]
+                    for e in it:
+                        # 自分を指す symlink などは is_file() が例外を出す。1つのせいで
+                        # 全レポートが見えなくならないよう、その項目だけ飛ばす
+                        try:
+                            if e.is_file() and e.name.endswith(".md"):
+                                entries.append(e)
+                        except OSError:
+                            continue
             except OSError:
                 entries = []
 
@@ -355,14 +363,65 @@ def _fsync_dir(directory: Path) -> None:
         os.close(dir_fd)
 
 
-def write_atomic(path: Path, text: str) -> None:
+class _Absent:
+    """`write_atomic` の `expect` に渡す「まだ無いはず」の目印（`ABSENT`）。"""
+
+    def __repr__(self) -> str:
+        return "ABSENT"
+
+
+ABSENT = _Absent()
+
+
+def _stat_key(path: Path) -> Optional[tuple[int, int]]:
+    """`write_atomic` の `expect` と比べる（mtime_ns, サイズ）。ファイルが無ければ None。"""
+    try:
+        result = path.stat()
+    except FileNotFoundError:
+        return None
+    return result.st_mtime_ns, result.st_size
+
+
+def write_atomic(path: Path, text: str, *,
+                 expect: Union[tuple[int, int], _Absent, None] = None) -> bool:
+    """tmp に書いて fsync し、`path` を原子的に置き換える。置き換えたら True。
+
+    `expect` は、Obsidian のようにロックを取らない書き手と競合しないための条件。
+    置き換える直前に `path` を調べ直し、合わなければ tmp を消して、置き換えずに False を返す
+    （相手の保存を消さない。呼び出し側は次の機会にやり直す）。
+
+    - `(st_mtime_ns, st_size)`: 呼び出し側が読む前に調べた値。違う（変わった・消えた）なら False
+    - `ABSENT`: まだ無いはず。置き換えの代わりに `os.link` で作るので、直前に同名のファイルが
+      できていれば上書きせず False（`os.replace` は黙って上書きしてしまう）
+    - `None`（既定）: 条件なし。必ず置き換える
+
+    直前の確認と置き換えの間は、ロックが無い以上ゼロにはできない（マイクロ秒）。ここで防ぐのは、
+    読んでから tmp を書いて fsync するまでの長い間（ミリ秒〜）の保存。mtime とサイズが
+    どちらも同じままの書き換えは見分けられない。
+    """
     tmp = path.with_name(path.name + TMP_SUFFIX)
     with open(tmp, "w", encoding="utf-8") as handle:
         handle.write(text)
         handle.flush()
         os.fsync(handle.fileno())
-    os.replace(tmp, path)
+    try:
+        if expect is ABSENT:
+            try:
+                os.link(tmp, path)
+            except FileExistsError:
+                tmp.unlink()
+                return False
+            tmp.unlink()
+        else:
+            if expect is not None and _stat_key(path) != expect:
+                tmp.unlink()
+                return False
+            os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     _fsync_dir(path.parent)
+    return True
 
 
 def _free_name(directory: Path, filename: str) -> Path:

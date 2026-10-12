@@ -18,15 +18,23 @@
   `QUIET_SECONDS` 秒以内に更新されたノートは、Obsidian で書いている最中かもしれないので
   その回は飛ばす（次の回で入る）。mtime が `QUIET_SECONDS` 秒以上未来のノートは
   （同期のずれなど）飛ばさず書く。
-- マーカーは行全体がマーカーだけの行に限り、コードフェンスの中は無視する（使い方の例として
-  書いたマーカーを本物と取り違えない）。マーカーが壊れている（片方だけ・複数ある・順序が逆・
-  フェンスが閉じていない）ノートは触らず、警告を1回だけ出す。
+- マーカーは行全体がマーカーだけの行（行頭の空白は3個まで。アプリは常に行頭に書くので、
+  タブや4個以上の字下げは字下げのコードブロックとみなして数えない）に限り、コードフェンスと
+  複数行の HTML コメントの中は無視する（使い方の例として書いたマーカーを本物と取り違えない）。
+  マーカーが壊れている（片方だけ・複数ある・順序が逆・フェンスやコメントが閉じていない）ノート
+  は触らず、警告を1回だけ出す。
+- **書く前に読み直す**: 書こうとする全文を同じ規則で読み直し、マーカーの組がちょうど1つ見え
+  ないなら書かない（書名などに紛れた文字が、アプリ自身でフェンスを開いて以後そのノートを
+  止めてしまうのを防ぐ）。
 
 更新は `ThemeWatcher` が数秒ごとに `rebuild()` を呼んで行う。ルーターから呼び出しを
 差し込まないのは、Obsidian でノートを作った・タグを書き換えたといった、アプリの API を
 通らない変化も拾う必要があるため。毎回 DB から全冊を引くが、100冊程度なら軽い。
 
-書き込みはレポートと同じロック（`reports/.write.lock`）と原子的な置き換えを使う。
+書き込みはレポートと同じロック（`reports/.write.lock`）と原子的な置き換えを使う。ただし
+Obsidian はこのロックを取らないので、読んでから置き換えるまでの間にユーザーが保存したら、
+置き換えずにその回は諦める（`report_store.write_atomic` の `expect`。次の回でやり直す）。
+1ファイルの書き込み失敗でジョブ全体は止めず、パスごとに警告を1回だけ出して続ける。
 
 ここの `escape_text` / `md_link` / `wrap_block` / `update_file` / `book_sections` /
 `replace_block` / `fill_block` は著者ノート（`author_store.py`）も使う共有部品。
@@ -68,8 +76,11 @@ _STATUS_LABEL = {
 _STATUS_ORDER = {BookStatus.READING: 0, BookStatus.FINISHED: 1, BookStatus.UNREAD: 2}
 
 # 一覧の文字に紛れると Markdown や Obsidian の記法になってしまう文字
-# （`#` はタグ、`[` `]` はリンク、`*` `_` は強調）。
-_MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]<>#|])")
+# （`#` はタグ、`[` `]` はリンク、`*` `_` は強調、`~` は取り消し線。`~~~` で始まる書名は
+# 行頭が `- ~~~` になり、コードフェンスの開きになる）。
+_MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]<>#|~])")
+# 行区切りになる文字（`str.splitlines()` が区切るもの）。書名や著者欄に紛れると一覧が複数行になる。
+_LINE_BREAKS = re.compile(r"[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]+")
 # リンク先に生で書くとリンクが壊れる文字。Obsidian は % エンコードを解釈する。
 _LINK_ESCAPES = {"%": "%25", " ": "%20", "(": "%28", ")": "%29", "#": "%23", "<": "%3C", ">": "%3E"}
 
@@ -119,15 +130,25 @@ def theme_tags(meta: dict, stem: str) -> tuple[str, ...]:
 
 
 def scan_notes(directory: Path) -> list[ThemeNote]:
-    """`themes/` 直下のテーマノート（ハブと隠しファイルを除く）を名前順に返す。"""
+    """`themes/` 直下のテーマノート（ハブと隠しファイルを除く）を名前順に返す。
+
+    ディレクトリがまだ無いのは「ノート0件」。それ以外で読めないときは例外を上げる（0件と
+    みなすと、ノートの一覧が全部つながりを失った状態で他のジョブが進んでしまう）。
+    壊れた symlink（自分を指す・権限の無い先）など、種別を調べられない項目はその1件だけ飛ばす。
+    """
+    entries = []
     try:
         with os.scandir(directory) as it:
-            entries = [
-                e for e in it
-                if e.is_file() and e.name.endswith(".md")
-                and not e.name.startswith(".") and e.name != HUB_NAME
-            ]
-    except OSError:
+            for entry in it:
+                if (not entry.name.endswith(".md") or entry.name.startswith(".")
+                        or entry.name == HUB_NAME):
+                    continue
+                try:
+                    if entry.is_file():
+                        entries.append(entry)
+                except OSError:
+                    continue
+    except FileNotFoundError:
         return []
     notes = []
     for entry in sorted(entries, key=lambda e: e.name):
@@ -144,7 +165,13 @@ def scan_notes(directory: Path) -> list[ThemeNote]:
 # ── 一覧を組み立てる ────────────────────────────────────────
 
 def escape_text(text: str) -> str:
-    return _MARKDOWN_SPECIAL.sub(r"\\\1", text)
+    """一覧の1行に入れる文字にする。記法になる文字はエスケープし、行区切りは空白1つにする。
+
+    DB の書名・著者欄には改行が入りうる（コピー＆ペースト）。そのまま書くと一覧が複数行になり、
+    次の行の頭が `~~~` なら、アプリ自身が開いたフェンスで END が隠れてノートが止まる。
+    CR は `read_text` が LF に直すので、書いた内容が読み戻すたびに違って見え、毎回書き直す。
+    """
+    return _MARKDOWN_SPECIAL.sub(r"\\\1", _LINE_BREAKS.sub(" ", text))
 
 
 def link_target(path: Path, start: Path) -> str:
@@ -305,48 +332,112 @@ def hub_block(hub: Path, books: list[Book], reports: dict[int, Path], notes: lis
 
 # ── 差し込み ────────────────────────────────────────────────
 
-# コードフェンスの開き・閉じ（CommonMark）。マーカーの例を書いたフェンスの中は探さない
-_FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-_FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})\s*$")
+# マーカーの行。行頭の空白は3個まで（4個以上・タブは字下げのコードブロックなので数えない。
+# アプリは常に行頭に書く）。後ろの空白は可。
+_START_LINE = re.compile(r" {0,3}" + re.escape(START) + r"\s*\Z")
+_END_LINE = re.compile(r" {0,3}" + re.escape(END) + r"\s*\Z")
+
+# コードフェンスの開き・閉じ（CommonMark）。マーカーの例を書いたフェンスの中は探さない。
+# フェンスの前に付く引用 `>`・リスト記号（`-` `*` `+` `1.` `1)`）とタブ・字下げは、剥がしてから見る。
+# Obsidian の既定ではリスト内のコードブロックはタブ字下げで、CommonMark の正確な規則
+# （どこまでがフェンスか）を再現するより、広めにフェンスとみなして隠すほうが安全だから
+# （隠しすぎた場合に起こるのは、一覧が足されない・重複して足されるだけで、ユーザーの文章は消えない）。
+_CONTAINER_PREFIX = re.compile(r"[ \t]*(?:>|(?:[-*+]|\d+[.)])(?=[ \t]))")
+_FENCE = re.compile(r"(`{3,}|~{3,})(.*)\Z")
 
 # 壊れたマーカーを警告済みのパス。5秒ごとに同じ警告を出さないために覚えておく
 # （直ったら外す。rebuild はウォッチャーの1スレッドから呼ぶので、ロックは要らない）
 _warned_broken: set[Path] = set()
+# 書き込めなかったパスの警告済み。同じ理由で毎回出さない（書けたら外す）
+_warned_write_failed: set[Path] = set()
+
+
+def _unwrap(line: str) -> str:
+    """行頭の引用・リスト記号・空白とタブを剥がす（フェンスと HTML コメントの判定用）。"""
+    while True:
+        prefix = _CONTAINER_PREFIX.match(line)
+        if prefix is None:
+            return line.lstrip(" \t")
+        line = line[prefix.end():]
+
+
+def _fence_of(line: str) -> Optional[tuple[str, int, str]]:
+    """フェンスの行なら（文字, 長さ, 後ろの文字列）。
+
+    バッククォートのフェンスは、後ろの文字列にバッククォートを含まない（CommonMark）。
+    "```js```" のような行はフェンスではなく文中のコード。
+    """
+    found = _FENCE.match(_unwrap(line))
+    if found is None:
+        return None
+    ticks, rest = found.groups()
+    if ticks[0] == "`" and "`" in rest:
+        return None
+    return ticks[0], len(ticks), rest
 
 
 def _marker_lines(lines: list[str]) -> Optional[tuple[list[int], list[int]]]:
-    """コードフェンスの外にある START 行・END 行の番号。フェンスが閉じていなければ None。
+    """コードブロックの外にある START 行・END 行の番号。閉じていないものが残れば None。
 
-    マーカーは行全体がマーカーだけの行（前後の空白は可）に限る。文中やインラインコードで
-    触れているだけのものは数えない。
+    マーカーは行全体がマーカーだけの行（行頭の空白3個まで）に限る。文中やインラインコードで
+    触れているだけのものは数えない。コードフェンスの中と、複数行の HTML コメント
+    （`<!--` で始まり、同じ行で `-->` が閉じないもの）の中は無視する。
+
+    コメントの中のマーカー行は、それ自体が `-->` を含むのでコメントを閉じる行とは見ない。
+    例として書いたマーカーをコメントで囲んだつもりのユーザーは、素直に読むと最初のマーカー行で
+    コメントが閉じて END だけが外に残り、触れなくなってしまうため。
     """
     starts: list[int] = []
     ends: list[int] = []
     fence: Optional[tuple[str, int]] = None   # 開いているフェンスの（文字, 長さ）
+    in_comment = False
     for number, line in enumerate(lines):
         if fence is not None:
-            close = _FENCE_CLOSE.match(line)
-            if close and close.group(1)[0] == fence[0] and len(close.group(1)) >= fence[1]:
+            closing = _fence_of(line)
+            if (closing and closing[0] == fence[0] and closing[1] >= fence[1]
+                    and not closing[2].strip()):
                 fence = None
             continue
-        opening = _FENCE_OPEN.match(line)
-        if opening:
-            fence = (opening.group(1)[0], len(opening.group(1)))
+        is_start = _START_LINE.match(line) is not None
+        is_end = _END_LINE.match(line) is not None
+        if in_comment:
+            if not (is_start or is_end) and "-->" in line:
+                in_comment = False
             continue
-        stripped = line.strip()
-        if stripped == START:
+        if is_start:
             starts.append(number)
-        elif stripped == END:
+            continue
+        if is_end:
             ends.append(number)
-    return None if fence is not None else (starts, ends)
+            continue
+        opening = _fence_of(line)
+        if opening:
+            fence = opening[:2]
+            continue
+        unwrapped = _unwrap(line)
+        if unwrapped.startswith("<!--") and "-->" not in unwrapped[4:]:
+            in_comment = True
+    return None if fence is not None or in_comment else (starts, ends)
+
+
+def _has_one_pair(text: str) -> bool:
+    """`text` を読んだとき、コードブロックの外にマーカーの組がちょうど1つ見えるか。"""
+    found = _marker_lines(text.split("\n"))
+    if found is None:
+        return False
+    starts, ends = found
+    return len(starts) == 1 and len(ends) == 1 and starts[0] < ends[0]
 
 
 def replace_block(text: str, block: str) -> Optional[str]:
     """START 行から END 行までを `block` に差し替えた全文。マーカーが無ければ末尾に足す。
 
-    マーカーが片方だけ・複数・順序が逆、またはコードフェンスが閉じていないなら None
-    （ユーザーの文章を壊さないよう触らない。閉じていないフェンスの中に足すと、次の回に
-    また足して増え続ける）。
+    マーカーが片方だけ・複数・順序が逆、またはコードフェンスや HTML コメントが閉じていない
+    なら None（ユーザーの文章を壊さないよう触らない。閉じていないフェンスの中に足すと、
+    次の回にまた足して増え続ける）。
+
+    末尾に足すとき落とすのは、末尾の改行と空白だけの行まで。最後の文章の行末の空白
+    （Markdown の改行になる半角スペース2つ）は残す。
     """
     lines = text.split("\n")
     found = _marker_lines(lines)
@@ -354,7 +445,10 @@ def replace_block(text: str, block: str) -> Optional[str]:
         return None
     starts, ends = found
     if not starts and not ends:
-        base = text.rstrip()
+        kept = list(lines)
+        while kept and not kept[-1].strip():
+            kept.pop()
+        base = "\n".join(kept)
         return f"{base}\n\n{block}\n" if base else f"{block}\n"
     if len(starts) == 1 and len(ends) == 1 and starts[0] < ends[0]:
         return "\n".join(lines[:starts[0]] + [block] + lines[ends[0] + 1:])
@@ -362,22 +456,30 @@ def replace_block(text: str, block: str) -> Optional[str]:
 
 
 def fill_block(path: Path, text: str, block: str) -> Optional[str]:
-    """`replace_block` と同じ。壊れていて書けないときは、そのパスにつき1回だけ警告を出す。
+    """`replace_block` と同じ。書けないときは、そのパスにつき1回だけ警告を出す。
+
+    書けないのは、マーカーが壊れているとき、または `block` を差し込んだ全文がマーカーの組を
+    ちょうど1つとして読み戻せないとき（`block` の中身がフェンスやコメントを開いてしまう）。
+    後者を書くと、そのノートは以後ずっと壊れたマーカーの扱いになって止まる。
 
     直ったら（文字列が返ったら）覚えを外すので、また壊れたらもう1回警告する。
     雛形（マーカーが無いと分かっているもの）には使わず、`replace_block` を直接呼ぶ。
     """
     new = replace_block(text, block)
-    if new is not None:
+    if new is None:
+        reason = ("マーカーが壊れているので一覧を書かない（start と end を1組にするか、"
+                  "閉じていないコードフェンスや HTML コメントを閉じると次の回で入る）")
+    elif not _has_one_pair(new):
+        new = None
+        reason = ("一覧を書くとマーカーを読み戻せなくなるので書かない（一覧に入る書名・著者名・"
+                  "タグの文字がコードフェンスなどを開いている。DB の値を直すと次の回で入る）")
+    else:
         _warned_broken.discard(path)
-    elif path not in _warned_broken:
+        return new
+    if path not in _warned_broken:
         _warned_broken.add(path)
-        logger.warning(
-            "マーカーが壊れているので一覧を書かない"
-            "（start と end を1組にするか、閉じていないコードフェンスを閉じると次の回で入る）: %s",
-            path,
-        )
-    return new
+        logger.warning("%s: %s", reason, path)
+    return None
 
 
 def update_file(path: Path, make_text: Callable[[Optional[str]], Optional[str]],
@@ -388,24 +490,48 @@ def update_file(path: Path, make_text: Callable[[Optional[str]], Optional[str]],
     未来側も含めて見るのは、`now` を rebuild の始めに1回だけ取るため（途中で保存された
     ノートの mtime は `now` より少し先になる）。一方、`quiet_seconds` 以上先の mtime
     （同期のずれなど）まで飛ばすと、そのノートを永久に更新できなくなる。
+
+    Obsidian はロックを取らない。読む前に調べた（mtime, サイズ）を `write_atomic` に渡し、
+    置き換える直前にもう一度調べて違えば、ユーザーの保存を消さないよう書かずに False を返す
+    （次の回でやり直す）。無かったファイルは「まだ無いはず」として作る。
+
+    書き込みの OSError（tmp が作れない・権限など）は、パスごとに1回だけ警告して False を返す。
+    1つのノートの失敗で、残りのノートやハブの更新（ジョブ全体）を止めないため。
     """
     with report_store.write_lock(report_store.reports_dir()):
         try:
-            mtime = path.stat().st_mtime
-        except FileNotFoundError:
-            current = None
-        else:
-            if abs(now - mtime) < quiet_seconds:
-                return False
-            try:
-                current = path.read_text(encoding="utf-8-sig")
-            except (OSError, UnicodeDecodeError):
-                return False
-        new = make_text(current)
-        if new is None or new == current:
+            return _update_locked(path, make_text, quiet_seconds, now)
+        except OSError as error:
+            if path not in _warned_write_failed:
+                _warned_write_failed.add(path)
+                logger.warning("ノートを更新できなかったので飛ばす（次の回にまた試す）: %s: %s",
+                               path, error)
             return False
-        report_store.write_atomic(path, new)
-        return True
+
+
+def _update_locked(path: Path, make_text: Callable[[Optional[str]], Optional[str]],
+                   quiet_seconds: float, now: float) -> bool:
+    try:
+        stat_result = path.stat()
+    except FileNotFoundError:
+        current = None
+        expect = report_store.ABSENT
+    else:
+        if abs(now - stat_result.st_mtime) < quiet_seconds:
+            return False
+        expect = (stat_result.st_mtime_ns, stat_result.st_size)
+        try:
+            current = path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            return False
+    new = make_text(current)
+    written = False
+    if new is not None and new != current:
+        written = report_store.write_atomic(path, new, expect=expect)
+    # 例外なく書き込みまで進んだ（書く必要が無かった・条件が合わず諦めた場合も含む）ので、
+    # 前の失敗は直ったとみなす
+    _warned_write_failed.discard(path)
+    return written
 
 
 def rebuild(db: Session, *, quiet_seconds: float = QUIET_SECONDS,
@@ -441,6 +567,19 @@ def rebuild(db: Session, *, quiet_seconds: float = QUIET_SECONDS,
 
 
 # ── 定期実行 ────────────────────────────────────────────────
+
+def _job_name(job: Callable) -> str:
+    """ログと「同じ失敗を繰り返し記録しない」の鍵にするジョブ名。
+
+    `functools.partial` や呼び出せるオブジェクトは `__name__` を持たない。名前づくりで
+    例外を出すと、セッションを開けない失敗として扱われて残りのジョブまで止まる。
+    """
+    qualname = getattr(job, "__qualname__", None)
+    if not qualname:
+        return repr(job)
+    module = getattr(job, "__module__", None)
+    return f"{module}.{qualname}" if module else qualname
+
 
 class ThemeWatcher:
     """ノートの一覧（ビュー）を作り直すジョブを数秒ごとに呼ぶスレッド。アプリの起動中だけ動かす。
@@ -485,7 +624,7 @@ class ThemeWatcher:
         try:
             with self._session_factory() as db:
                 for job in self._jobs:
-                    name = f"{job.__module__}.{job.__name__}"
+                    name = _job_name(job)
                     try:
                         written = job(db)
                     except Exception as error:  # 1つの失敗で他のジョブまで止めない

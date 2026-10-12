@@ -242,7 +242,7 @@ def _apply(directory: Path, path: Path) -> _Examined:
             os.chmod(path, stat.S_IMODE(before.st_mode))
             os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
         except OSError as error:
-            # write_atomic が途中で失敗すると一時ファイルが残る
+            # 一時ファイルへの書き込みの途中で失敗すると、それが残ることがある
             with suppress(OSError):
                 path.with_name(path.name + report_store.TMP_SUFFIX).unlink()
             return _Examined(WRITE_FAILED, detail=str(error))
