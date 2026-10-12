@@ -6,16 +6,21 @@
 マーカー `<!-- notes:books:start --> … <!-- notes:books:end -->` の間だけ。部品（マーカーの
 差し替え・書き込み・本の行）は `theme_store` のものを共有する。
 
-- **著者の分け方**: `Book.author` を NFKC 正規化して `,` `、` で分け、末尾の役割表記
-  （`／著` `／訳` `（編著）` など）を落とす。訳者も著者と同じに扱う（DB の著者欄に役割は無いことが
-  多く、役割で分けると同じ人が本によって入ったり外れたりするため）。照合は空白・`・` `.` `=` を除き
-  casefold したキーで行い、表記揺れを同じ人にまとめる。
+- **著者の分け方**: `Book.author` を NFKC 正規化して（書式文字は落として）`,` `、` で分け、
+  末尾の役割表記（`／著` `／訳` `（編著）` `(著, 編集)` など）を変化が無くなるまで落とす。括弧の中の
+  区切りでは分けない。訳者も著者と同じに扱う（DB の著者欄に役割は無いことが多く、役割で分けると
+  同じ人が本によって入ったり外れたりするため）。照合は空白・`・` `.` `=` を除き casefold した
+  キーで行い、表記揺れを同じ人にまとめる。
 - **ノートが集める名前**: ファイル名（stem）と frontmatter の `aliases`。別の文字種の表記
   （`H.G. Wells` と `H・G・ウェルズ`）は `aliases` でユーザーが1つにまとめる。
 - **ノートを作るのは、レポートが1冊以上ある著者に限り、どのノートも集めていないときだけアプリ**。
   それ以外の著者はハブ `authors/著者一覧.md` に冊数付きの文字で出す。ユーザーが作ったノートは
   レポートの有無に関係なく埋める。アプリはノートを改名も削除もしない（消されたノートは、
   著者にレポートがある限り次の回に作り直される）。
+- **自動作成は、ノートの名前を確かに読めた回だけ**。編集途中のノートは aliases を読めず、
+  まとめたはずの著者のノートを作り直してしまう。frontmatter が解釈できない・空・読めない・
+  直近に更新された、のどれかのノートが1つでもある回は、作るのを控える（一覧の書き直しとハブは行う）。
+  作るノートが他の著者のキーや、既に集められているキーまで集めてしまうときも作らない。
 - 書き直すのは中身が変わったときだけ、直近に更新されたノートは飛ばす、マーカーが壊れたノートは
   触らない、といった書き込みの規則は `theme_store` と同じ（`update_file` / `fill_block`）。
 
@@ -43,17 +48,25 @@ HUB_NAME = "著者一覧.md"
 NOTE_TYPE = "author-note"
 HUB_TYPE = "author-hub"
 
-_SEPARATORS = re.compile(r"[,、]")          # NFKC のあとに使う（，→ , と ､ → 、は NFKC が揃える）
-_ROLES_ANY = "編著|共著|著者|訳者|編者|監修|監訳|翻訳|原作|解説|著|訳|編|作|絵|文|画"
-# 空白区切りの役割に「作」「絵」「文」「画」を入れないのは、Google Books の「山田 文」のような
-# 姓と1文字の名を役割と取り違えないため
+_SEPARATOR_CHARS = ",、"                      # NFKC のあとに使う（，→ , と ､ → 、は NFKC が揃える）
+_ROLES_ANY = (
+    "編著|共著|著者|訳者|編者|監修|監訳|翻訳|原作|解説|"
+    "編集|編纂|編訳|校注|校閲|校訂|原著|原案|原画|序文|構成|企画|協力|脚本|漫画|作画|挿絵|"
+    "イラストレーター|イラスト|写真|撮影|"
+    "著|訳|編|作|絵|文|画"
+)
+# 空白区切りの役割に「作」「絵」「文」「画」など1文字の語を入れないのは、Google Books の
+# 「山田 文」のような姓と1文字の名を役割と取り違えないため
 _ROLES_SPACED = "編著|共著|著者|訳者|編者|監修|監訳|翻訳|著|訳|編"
+# 括弧の中が役割だけ（`著`、`著, 編集`）のとき。1つでも役割でない語が混ざれば落とさない
+_ROLE_LIST = rf"(?:{_ROLES_ANY})(?:\s*[{_SEPARATOR_CHARS}]\s*(?:{_ROLES_ANY}))*"
 _ROLE_SUFFIX = re.compile(
     rf"(?:\s*/\s*(?:{_ROLES_ANY})"             # 「／著」「/訳」
-    rf"|\s*[(\[]\s*(?:{_ROLES_ANY})\s*[)\]]"   # 「（編著）」「[著]」（NFKC で全角括弧も半角になる）
+    rf"|\s*[(\[]\s*{_ROLE_LIST}\s*[)\]]"       # 「（編著）」「[著]」「(著, 編集)」（NFKC で全角括弧も半角になる）
     rf"|\s+(?:{_ROLES_SPACED}))\s*$"           # 「 編」「 訳」（空白区切りは紛れない役割だけ）
 )
 _SPACES = re.compile(r"\s+")
+_FRONT_MATTER_OPEN = re.compile(r"---[ \t]*(?:\r?\n|\Z)")   # 先頭の行が `---` だけ（match で使う）
 _KEY_DROP = re.compile(r"[\s・.=·]")          # 照合キーで無視する文字
 _UNSAFE_NAME = re.compile(r'[\\/:*?"<>|#^\[\]\x00-\x1f\x7f]')   # ファイル名・Obsidian のリンクで困る文字
 _STEM_BYTES = 200                              # ファイル名の上限（UTF-8 で 255 バイト未満に収める）
@@ -78,28 +91,85 @@ def authors_dir() -> Path:
 
 # ── 名前の扱い ──────────────────────────────────────────────
 
+def _drop_format_chars(text: str) -> str:
+    """書式文字（Unicode のカテゴリ Cf: ゼロ幅スペース・ソフトハイフン・BOM など）を落とす。
+
+    見えないので、残すと見た目が同じ名前が別の著者・別のファイルになり、名前の見えないファイルもできる。
+    """
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+
+def _normalize(text: str) -> str:
+    """書式文字を落として NFKC に揃える。
+
+    順序は落としてから NFKC。書式文字が濁点などの結合文字の間にあると、落とした後で合成が
+    変わる（`ｶ` `\\xad` `ﾞ` が、NFKC のあとに落とすと `ガ` のまま残り、もう一度通すと `ガ` になる）。
+    NFKC は書式文字を作らないので、落としたあとに残ることはない。
+    """
+    return unicodedata.normalize("NFKC", _drop_format_chars(text))
+
+
 def author_key(name: str) -> str:
-    """照合キー。NFKC → 空白と `・` `.` `=` `·` を除去 → casefold。
+    """照合キー。書式文字を除去 → NFKC → 空白と `・` `.` `=` `·` を除去 → casefold。
 
     出典ごとの表記揺れ（全角半角・空白・カナ表記の区切り・大文字小文字）を同じ人にまとめる。
     macOS の Obsidian が付ける NFD のファイル名も、NFKC で NFC に揃うので同じキーになる。
     """
-    return _KEY_DROP.sub("", unicodedata.normalize("NFKC", name)).casefold()
+    return _KEY_DROP.sub("", _normalize(name)).casefold()
+
+
+def _split_outside_brackets(text: str) -> list[str]:
+    """`,` `、` で分ける。対になった括弧 `(…)` `[…]` の中の区切りでは分けない。
+
+    `山田太郎 (著, 編集), 鈴木花子 (翻訳)` を括弧の中でも切ると、`山田太郎 (著` と `編集)` に
+    なってしまう。閉じていない括弧は無視する（開き括弧が残りの著者を飲み込まないように）。
+    """
+    opened: list[int] = []
+    delta = [0] * (len(text) + 1)   # 位置ごとの括弧の深さの増減（入れ子が深くても1回の走査で済む）
+    for i, ch in enumerate(text):
+        if ch in "([":
+            opened.append(i)
+        elif ch in ")]" and opened:
+            delta[opened.pop()] += 1
+            delta[i + 1] -= 1
+    parts: list[str] = []
+    depth = 0
+    begin = 0
+    for i, ch in enumerate(text):
+        depth += delta[i]
+        if depth == 0 and ch in _SEPARATOR_CHARS:
+            parts.append(text[begin:i])
+            begin = i + 1
+    parts.append(text[begin:])
+    return parts
+
+
+def _strip_roles(name: str) -> str:
+    """末尾の役割表記を、変化が無くなるまで落とす（`山田太郎 編 著`、`山田太郎(編)/著`）。
+
+    1回だけだと落とした名前にまだ役割が残り、その名前をもう一度 `split_authors` に通すと
+    別の名前になる（ノートのファイル名や aliases に使った名前が、著者の名前と一致しなくなる）。
+    """
+    while True:
+        stripped = _ROLE_SUFFIX.sub("", name, count=1).strip()
+        if len(stripped) >= len(name):   # 短くならなければ止める
+            return name
+        name = stripped
 
 
 def split_authors(author: Optional[str]) -> list[str]:
     """著者欄を人ごとの表示名に分ける。キーで重複を除き、出てきた順に返す。
 
-    NFKC → `,` `、` で分割 → 各部分を strip → 末尾の役割表記を1回だけ落とす → 空白を1つに詰める。
-    キーが空になるもの（空文字・役割だけ）は捨てる。
+    書式文字を除去 → NFKC → 括弧の外の `,` `、` で分割 → 空白を1つに詰めて strip
+    → 末尾の役割表記を繰り返し落とす。キーが空になるもの（空文字・役割だけ）は捨てる。
+    結果の各名前をもう一度この関数に通しても変わらない（ノートの stem や aliases に使えるように）。
     """
     if not author:
         return []
     names: list[str] = []
     seen: set[str] = set()
-    for part in _SEPARATORS.split(unicodedata.normalize("NFKC", author)):
-        name = _ROLE_SUFFIX.sub("", part.strip(), count=1)
-        name = _SPACES.sub(" ", name).strip()
+    for part in _split_outside_brackets(_normalize(author)):
+        name = _strip_roles(_SPACES.sub(" ", part).strip())
         key = author_key(name)
         if key and key not in seen:
             seen.add(key)
@@ -110,12 +180,15 @@ def split_authors(author: Optional[str]) -> list[str]:
 def note_stem(name: str) -> str:
     """自動作成するノートのファイル名（拡張子なし）。作れない名前なら空文字。
 
-    使えない文字を除き、空白を詰め、先頭・末尾の `.` を落とす（隠しファイルにしない）。
+    書式文字と使えない文字を除き、空白を詰め、先頭・末尾の `.` を落とす（隠しファイルにしない）。
     長すぎれば UTF-8 で `_STEM_BYTES` バイトまでに切る（文字の途中では切らない）。
+    文字（L*）か数字（N*）を1つも含まない名前（記号・絵文字・結合文字だけ）はファイル名にしない。
     """
-    stem = _SPACES.sub(" ", _UNSAFE_NAME.sub("", name)).strip().strip(".")
-    stem = stem.encode("utf-8")[:_STEM_BYTES].decode("utf-8", errors="ignore")
-    return stem.strip()
+    stem = _SPACES.sub(" ", _UNSAFE_NAME.sub("", _normalize(name))).strip().strip(".")
+    stem = stem.encode("utf-8")[:_STEM_BYTES].decode("utf-8", errors="ignore").strip()
+    if not any(unicodedata.category(ch)[0] in "LN" for ch in stem):
+        return ""
+    return stem
 
 
 # ── DB 側: 著者の集計 ───────────────────────────────────────
@@ -149,6 +222,7 @@ class AuthorNote:
     path: Path
     names: tuple[str, ...]     # stem が先頭、続いて aliases。キーで重複を除いた順
     keys: frozenset[str]       # names の author_key
+    mtime: Optional[float] = None   # 読んだときの更新時刻。scan_notes が読んだノートだけ入る
 
 
 def note_names(meta: dict, stem: str) -> tuple[str, ...]:
@@ -176,35 +250,79 @@ def note_names(meta: dict, stem: str) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _note_of(path: Path, meta: dict) -> AuthorNote:
+def _note_of(path: Path, meta: dict, mtime: Optional[float] = None) -> AuthorNote:
     names = note_names(meta, path.stem)
-    return AuthorNote(path, names, frozenset(author_key(name) for name in names))
+    return AuthorNote(path, names, frozenset(author_key(name) for name in names), mtime)
 
 
-def scan_notes(directory: Path) -> list[AuthorNote]:
-    """`authors/` 直下のノート（ハブと隠しファイルを除く）をファイル名順に返す。
+@dataclass(frozen=True)
+class NoteScan:
+    """`scan_notes` の結果。ノートの一覧と、名前を確かに読めなかったファイル。"""
+    notes: list[AuthorNote]               # 読めたノート（ファイル名順）。doubts にあるものも含む
+    doubts: list[tuple[Path, str]]        # aliases を確かめられないファイルと、その理由
 
-    サブフォルダは見ない。読めないファイルは飛ばす。
+    def reason_to_wait(self, now: float, quiet_seconds: float) -> Optional[str]:
+        """ノートの名前をまだ信じられない理由。自動作成してよいなら None。
+
+        編集途中のノートは aliases を読めない（閉じていない `[`、保存途中の空ファイル）。
+        そのまま「どのノートも集めていない」と判定すると、aliases でまとめた著者のノートを
+        作り直してしまい、直した後も残る。だから、ひとつでも怪しいノートがある回は作らない。
+        直近に更新されたノートも同じ（`update_file` と同じ、`now` の前後 `quiet_seconds` 秒）。
+        """
+        if self.doubts:
+            path, reason = self.doubts[0]
+            return f"{path.name}: {reason}"
+        for note in self.notes:
+            if note.mtime is not None and abs(now - note.mtime) < quiet_seconds:
+                return f"{note.path.name}: 直近に更新された"
+        return None
+
+
+def _doubt_of(text: str, meta: dict) -> str:
+    """読めたノートの aliases を信じてよいか。信じられない理由（信じてよければ空文字）。
+
+    `---` で始まるのに frontmatter が解釈できないのは、書きかけか壊れているとき
+    （`split_front_matter` は壊れていても例外にせず空の辞書を返すので、ここで見分ける）。
     """
-    try:
-        with os.scandir(directory) as it:
-            entries = [
-                e for e in it
-                if e.is_file() and e.name.endswith(".md")
-                and not e.name.startswith(".") and e.name != HUB_NAME
-            ]
-    except OSError:
-        return []
-    notes = []
-    for entry in sorted(entries, key=lambda e: e.name):
+    if not text.strip():
+        return "空のファイル"
+    if not meta and _FRONT_MATTER_OPEN.match(text):
+        return "frontmatter を解釈できない"
+    return ""
+
+
+def scan_notes(directory: Path) -> NoteScan:
+    """`authors/` 直下のノート（ハブと隠しファイルを除く）をファイル名順に読む。
+
+    サブフォルダは見ない。1つのファイルが読めなくても（デコードできない・自分を指す symlink など）
+    そこで止めず、他のノートは読む。読めなかったファイルは `doubts` に理由つきで残し、
+    自動作成を控える理由にする（全部が見えなくなると、まとめたはずの著者のノートまで作り直す）。
+    ディレクトリそのものを開けないときは例外を上げる（その回の更新を止める）。
+    """
+    with os.scandir(directory) as it:
+        entries = sorted(
+            (e for e in it
+             if e.name.endswith(".md") and not e.name.startswith(".") and e.name != HUB_NAME),
+            key=lambda e: e.name,
+        )
+    notes: list[AuthorNote] = []
+    doubts: list[tuple[Path, str]] = []
+    for entry in entries:
         path = Path(entry.path)
         try:
+            if not entry.is_file():   # 壊れた symlink は例外にならず False（ノートではない）
+                continue
+            mtime = path.stat().st_mtime
             text = path.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError) as error:
+            doubts.append((path, f"読めない（{type(error).__name__}）"))
             continue
         meta, _ = report_store.split_front_matter(text)
-        notes.append(_note_of(path, meta))
-    return notes
+        notes.append(_note_of(path, meta, mtime))
+        doubt = _doubt_of(text, meta)
+        if doubt:
+            doubts.append((path, doubt))
+    return NoteScan(notes, doubts)
 
 
 def books_of(note: AuthorNote, authors: dict[str, Author]) -> list[Book]:
@@ -298,6 +416,49 @@ def new_note_text(author: Author, stem: str) -> str:
             + f"\n# {escape_text(author.name)}\n")
 
 
+def _create_notes(directory: Path, authors: dict[str, Author], notes: list[AuthorNote],
+                  reports: dict[int, Path], themes: list[tuple[Path, set[int]]],
+                  quiet_seconds: float, now: float) -> list[AuthorNote]:
+    """レポートのある著者で、どのノートも集めていないもののノートを作る。作ったノートを返す。
+
+    作る前に、次の2つを確かめる（満たさなければその著者は作らず、ハブに文字で出る）。
+    - 作るノートが、次の回の `scan_notes` と同じ道（雛形を書いて frontmatter を読み、`note_names`）で
+      その著者のキーを集める。集められないノートを作ると、毎回作り直しを試みる
+    - 作るノートが、その著者のほかに集めるキー（ファイル名にしたときの `a: b` → `a b` のキー）が、
+      他の著者のキーでも、既に集められているキーでもない。そうでないと、他の著者の本まで載せたり、
+      同じ名前を2つのノートが集めたりする（`ABC*` と `Abc` から `ABC.md` と `Abc.md`）
+    """
+    covered = set().union(*(note.keys for note in notes))
+    taken = {note.path.name for note in notes} | {HUB_NAME}
+    created: list[AuthorNote] = []
+    for author in sorted(authors.values(), key=lambda a: (a.name, a.key)):
+        if author.key in covered or not any(b.id in reports for b in author.books):
+            continue
+        stem = note_stem(author.name)
+        if not stem or f"{stem}.md" in taken:
+            continue
+        path = directory / f"{stem}.md"
+        template = new_note_text(author, stem)
+        meta, _ = report_store.split_front_matter(template)
+        note = _note_of(path, meta)
+        if author.key not in note.keys:
+            continue
+        if (note.keys - {author.key}) & (covered | authors.keys()):
+            continue
+        block = author_block(note, books_of(note, authors), reports, themes)
+        text = theme_store.replace_block(template, block)
+
+        def make_new(current: Optional[str], text: Optional[str] = text) -> Optional[str]:
+            # 読んでからロックを取るまでに同じ名前のファイルができていたら、その回は触らない
+            return text if current is None else None
+
+        if theme_store.update_file(path, make_new, quiet_seconds, now):
+            created.append(note)
+            covered |= note.keys   # 同じ回の後ろの著者の判定に効かせる
+            taken.add(path.name)
+    return created
+
+
 # ── 差し込み ────────────────────────────────────────────────
 
 def rebuild(db: Session, *, quiet_seconds: float = theme_store.QUIET_SECONDS,
@@ -309,7 +470,8 @@ def rebuild(db: Session, *, quiet_seconds: float = theme_store.QUIET_SECONDS,
     books = list(db.scalars(select(Book).options(selectinload(Book.tags)).order_by(Book.id)))
     reports = report_store.report_paths()
     authors = collect_authors(books)
-    notes = scan_notes(directory)
+    scan = scan_notes(directory)   # ディレクトリを開けなければ例外（その回は何も書かない）
+    notes = scan.notes
     # テーマの所属は、著者ごとに books_for を呼び直さないよう1回だけ計算する
     themes = [(t.path, {b.id for b in theme_store.books_for(t.tags, books)})
               for t in theme_store.scan_notes(theme_store.themes_dir())]
@@ -326,29 +488,12 @@ def rebuild(db: Session, *, quiet_seconds: float = theme_store.QUIET_SECONDS,
         if theme_store.update_file(note.path, make_note, quiet_seconds, now):
             written.append(note.path)
 
-    # 2. 自動作成: レポートのある著者で、どのノートも集めていないもの
-    covered = set().union(*(note.keys for note in notes))
-    taken = {note.path.name for note in notes} | {HUB_NAME}
+    # 2. 自動作成: レポートのある著者で、どのノートも集めていないもの。
+    #    ノートの名前を確かに読めた回だけ（読めていないノートの aliases が、その著者を集めているかもしれない）
     created: list[AuthorNote] = []
-    for author in sorted(authors.values(), key=lambda a: (a.name, a.key)):
-        if author.key in covered or not any(b.id in reports for b in author.books):
-            continue
-        stem = note_stem(author.name)
-        if not stem or f"{stem}.md" in taken:
-            continue
-        path = directory / f"{stem}.md"
-        note = _note_of(path, _new_note_meta(author, stem))
-        block = author_block(note, books_of(note, authors), reports, themes)
-        text = theme_store.replace_block(new_note_text(author, stem), block)
-
-        def make_new(current: Optional[str], text: Optional[str] = text) -> Optional[str]:
-            # 読んでからロックを取るまでに同じ名前のファイルができていたら、その回は触らない
-            return text if current is None else None
-
-        if theme_store.update_file(path, make_new, quiet_seconds, now):
-            written.append(path)
-            created.append(note)
-            taken.add(path.name)
+    if scan.reason_to_wait(now, quiet_seconds) is None:
+        created = _create_notes(directory, authors, notes, reports, themes, quiet_seconds, now)
+        written += [note.path for note in created]
 
     # 3. ハブ
     hub = directory / HUB_NAME

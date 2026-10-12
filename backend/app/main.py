@@ -16,6 +16,18 @@ from .routers import (
 DIST_DIR = (Path(__file__).resolve().parents[2] / "frontend" / "dist").resolve()
 
 
+_OFF_VALUES = {"0", "false", "off", "no"}
+
+
+def env_enabled(name: str) -> bool:
+    """環境変数 `name` が「止める」値でなければ True（未設定も True）。
+
+    止める値は `0` `false` `off` `no`（大文字小文字・前後の空白は無視）。`0` だけだと、
+    `=false` と書いた人の意図に反して止まらず、ノートを書き換え続けてしまう。
+    """
+    return os.environ.get(name, "1").strip().lower() not in _OFF_VALUES
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """起動時に一度だけ走る処理。
@@ -29,11 +41,12 @@ async def lifespan(app: FastAPI):
     add_missing_columns(engine)
     # テーマノート（reports/themes/）と著者ノート（reports/authors/）の一覧を数秒ごとに書き直す。
     # NOTES_THEMES_WATCH=0 で両方止まる（一時的にファイルを触らせたくないとき）。
-    # NOTES_AUTHORS_WATCH=0 で著者ノートだけ止まる（ノートの自動作成を止めたいとき）
+    # NOTES_AUTHORS_WATCH=0 で著者ノートだけ止まる（ノートの自動作成を止めたいとき）。
+    # 0 のほか false / off / no でも止まる
     watcher = None
-    if os.environ.get("NOTES_THEMES_WATCH", "1") != "0":
+    if env_enabled("NOTES_THEMES_WATCH"):
         jobs = [theme_store.rebuild]
-        if os.environ.get("NOTES_AUTHORS_WATCH", "1") != "0":
+        if env_enabled("NOTES_AUTHORS_WATCH"):
             jobs.append(author_store.rebuild)
         watcher = theme_store.ThemeWatcher(SessionLocal, jobs=jobs)
         watcher.start()
