@@ -3,7 +3,7 @@
 読書記録と学習ノート（本の要約・感想、技術書の勉強）を残す個人用Webアプリ。
 **自動化・連携**（ISBNからの本情報取得、読了時の「次に読む本」提案）を最重視する。
 
-- 最終更新: 2026-10-04（デザインの I・J を反映: カテゴリとタグ（8b）、おすすめ一覧を1列に）
+- 最終更新: 2026-10-12（保存の境界 0001・著者ノート 0002 を反映。§2・§3 の古い記述を実装に合わせた）
 - 現在地: **PC版・モバイル版とも完成**
 - **デザインの正本は `Notes App Base Design/design_handoff_notes_reading_app/`**。README.md が画面仕様、`_ds/broadsheet-…/styles.css` がトークンの正本。同梱の `.dc.html` はプロトタイプで、React で再実装してある
 
@@ -15,7 +15,7 @@
 |---|---|
 | 記録手段 | PCでタイピング（手書き・スマホ入力は対象外） |
 | 画面構成 | **3ペイン**（アイコンレール76px / 一覧340px / 詳細）＋ **⌘K コマンドパレット** |
-| ビュー | 本棚 / メモ・引用 / 振り返り / **おすすめ** / 設定（おすすめはデザイン外の仮置き。下記） |
+| ビュー | 本棚 / メモ・引用 / 振り返り / **おすすめ**（デザイン J） / 設定 |
 | 本の状態 | 積読 `unread` / 読書中 `reading` / 読了 `finished` |
 | 進捗 | 読んだページ `page` と総ページ `total`。**`page >= total` で自動的に読了**にする |
 | 評価 | ★1〜5（任意）。おすすめ度 `strong` / `some` / `self` |
@@ -42,7 +42,7 @@
 ## 2. 構成
 
 - バックエンド: FastAPI + SQLAlchemy 2.1 + Pydantic v2 + SQLite
-- フロントエンド: React + TypeScript + Vite + Tailwind CSS
+- フロントエンド: React + TypeScript + Vite（**Tailwind は使わない**。見た目はデザインシステムのトークン。§6 Step D）
 - Python 仮想環境は**リポジトリルートの `.venv/`** 1つ（backend 用。frontend は npm）
 
 ### 起動モードは2つある
@@ -123,49 +123,70 @@ def serve_frontend(full_path: str):
 Notes/                          ← git リポジトリのルート
 ├── .venv/                      Python仮想環境（ルートに1つ。git管理外）
 ├── .gitignore
-├── .claude/skills/next-book-suggestions/  「次に読む本」の候補づくり（SKILL.md が手順の正本）
-├── .claude/skills/keyword-suggestions/    キーワードのおすすめづくり（照合は next-book-suggestions の nbs.py を使う）
-├── docs/SPEC.md                このファイル
+├── run.sh                      起動・テスト・セットアップの入口（下の「起動・確認コマンド」）
+├── books.txt                   本のメモ（アプリは読まない）
+├── .claude/
+│   ├── agents/                 サブエージェントの定義
+│   └── skills/                 next-book-suggestions / keyword-suggestions（SKILL.md が手順の正本）
+├── docs/
+│   ├── SPEC.md                 このファイル（いまの仕様。正本）
+│   ├── systemd-service.md      母艦の常駐（notes-web）の手順
+│   └── design/                 設計書（なぜそう決めたか。README.md に一覧）
+├── scripts/                    一回限りの移行スクリプト（migrate_report_md_to_files.py / strip_report_frontmatter.py）
+├── reports/                    読書レポート・テーマノート・著者ノート（git 管理外。§4）
 ├── Notes App Base Design/      ClaudeDesign から受け取ったデザイン（正本。触らない）
 │   └── design_handoff_notes_reading_app/
 │       ├── README.md           画面仕様。実装で迷ったらここを見る
-│       ├── Notes Web.dc.html   Web版のプロトタイプ（出荷コードではない）
-│       ├── Notes Next Book.dc.html  「次に読む本」#5a（未実装）
+│       ├── *.dc.html           デザインのプロトタイプ（Notes Web / Mobile / Report / Next Book / Category Tag / Base Design。出荷コードではない）
 │       └── _ds/broadsheet-…/   デザインシステム（styles.css がトークンの正本）
 ├── backend/
-│   ├── requirements.txt / pytest.ini / reading.db(git管理外)
+│   ├── requirements.txt / pytest.ini / reading.db（git 管理外）
+│   ├── .env.example            .env にコピーして使う（GOOGLE_BOOKS_API_KEY）。.env は git 管理外
 │   ├── app/
-│   │   ├── main.py             入口（lifespan で create_all + ルーター + 静的配信）
-│   │   ├── database.py         engine / Base / get_db / SQLite の PRAGMA
-│   │   ├── timeutil.py         JST の now / today（日時はここ経由で取る）
-│   │   ├── isbn.py             ISBN の正規化（ハイフン除去・10→13変換・検査）
-│   │   ├── booklookup.py       本を探す（国会図書館 / openBD / Google Books）
+│   │   ├── main.py             入口。lifespan（テーブル作成・列追加・ウォッチャーの開始）、ルーター登録、SPA 配信
+│   │   ├── database.py         engine・セッション・get_db・SQLite の PRAGMA・add_missing_columns
+│   │   ├── models.py           DB のテーブル定義（Book / Note / Reading / BookCover / Tag / Settings / Suggestion / Topic …）
+│   │   ├── schemas.py          API の入出力の型と入力チェック（ISBN の正規化もここ）
+│   │   ├── report_store.py     読書レポート（reports/）の読み書き・索引・ゴミ箱
+│   │   ├── theme_store.py      テーマノートとハブへの一覧の差し込み。ThemeWatcher（5秒ごと）
+│   │   ├── author_store.py     著者ノートとハブへの一覧の差し込み（部品は theme_store を使う）
+│   │   ├── booklookup.py       ISBN・書名から本を探す（openBD / Google Books / 国会図書館）
+│   │   ├── isbn.py             ISBN の正規化と検査
+│   │   ├── covers.py           手で入れる表紙を 600×900 以内の JPEG に縮める
+│   │   ├── timeutil.py         now_jst / today_jst（日時はここ経由で取る）
 │   │   ├── settings_store.py   設定の1行を読む（無ければ既定値で作る）
-│   │   ├── models.py           Book / Note / Settings
-│   │   ├── schemas.py          API入出力の型・バリデーション
 │   │   └── routers/
-│   │       ├── books.py  lookup.py  notes.py  reviews.py  settings.py
-│   │       └── suggestions.py  Step 5（未作成）
-│   └── tests/                  conftest / fixtures_lookup / test_*.py
+│   │       ├── books.py  notes.py  lookup.py  suggestions.py  topics.py
+│   │       └── recommendations.py  reviews.py  tags.py  settings.py
+│   └── tests/                  conftest.py・fixtures_lookup.py・test_*.py
 └── frontend/
-    ├── vite.config.ts          dev server の host / プロキシ設定
+    ├── package.json            scripts: dev / build / lint / test
+    ├── vite.config.ts          host 0.0.0.0。/api を API_PORT の FastAPI へ中継
+    ├── index.html, tsconfig*.json, .oxlintrc.json
     └── src/
-        ├── api.ts              バックエンドとの通信をここにまとめる
-        ├── export.ts           Markdown / CSV の書き出し
-        ├── types.ts            ビューと絞り込みの型
-        ├── App.tsx             3ペインのシェル・ビュー切替・⌘K・執筆モード
-        ├── styles/
-        │   ├── broadsheet.css  デザインシステムの正本のコピー（触らない）
-        │   └── app.css         アプリ固有。トークンだけを使う
-        └── components/
-            ├── Rail / LibraryPane / NotesPane / ReviewPane / SettingsPane
-            ├── BookDetailView / NoteDetailView / ReviewView / SettingsView
-            ├── CommandPalette / ReportEditor / MemoWindow
-            └── Segmented / Cover / Stars / CmykNumber / Toast
+        ├── main.tsx            エントリ。index.css を読む
+        ├── App.tsx             幅820px以下は mobile/MobileApp、それ以外は DesktopShell
+        ├── DesktopShell.tsx    PC版（3ペイン・⌘K・執筆モード）
+        ├── useAppData.ts       本・記録・タグ・設定の読み書き（PC版・モバイル版で共有）
+        ├── useBookSuggestions.ts / useRecommendations.ts   次に読む本・おすすめ一覧の読み書き
+        ├── api.ts              /api への fetch と型をここにまとめる
+        ├── types.ts            画面と絞り込みの型
+        ├── visibility.ts       絞り込みの判定
+        ├── progress.ts         進捗の ％ ⇄ ページの換算
+        ├── recommendations.ts  おすすめの見せ方の小道具
+        ├── markdownInsert.ts   執筆モードの差し込み規則（純粋関数）
+        ├── export.ts           Markdown / CSV の書き出し（ブラウザ側で組み立てる）
+        ├── isbnLike.ts         検索欄の文字列が ISBN らしいかの判定
+        ├── *.test.ts           vitest（上の純粋関数のテスト）
+        ├── components/         PC版の部品（Rail / LibraryPane / BookDetailView / ReportEditor / CommandPalette など）
+        ├── mobile/             モバイル版（MobileApp が切り替え。TabBar。画面はデザイン 7a〜7i）
+        └── styles/
+            ├── broadsheet.css  デザインのトークンの正本のコピー（触らない）
+            ├── app.css         PC版の見た目（トークンを使う）
+            └── mobile.css      モバイル版の見た目（同上）
 ```
 
-> フロントの見た目（Tailwind のクラス）は仮置き。**後から ClaudeDesign のデザインに差し替える**前提なので、
-> 構造とロジックはコンポーネントに、装飾は `className` に閉じ込めてある。
+> 見た目は `frontend/src/styles/broadsheet.css` のトークンだけで組む（hex や px を直書きしない）。Tailwind は使わない（§6 Step D で廃止）。
 
 ### .gitignore（ルートに置く）
 
@@ -180,6 +201,8 @@ reading.db-shm
 node_modules/
 frontend/dist/
 .pytest_cache/
+reports/
+backup/
 ```
 
 ### 起動・確認コマンド
@@ -271,9 +294,7 @@ APIが足して返す値: `progress`（読んだ割合％。総ページ未設�
 
 レポートのファイルは Obsidian（`Storage/Notes/reports` の symlink）から直接編集してよい。
 アプリは毎リクエスト mtime+size で再検証するので、再起動なしで反映される。
-- **frontmatter の書誌項目は DB の複製**（title / author / isbn / genre / status / rating /
-  started_on / finished_on / tags）。値が変わったら（ページ進捗から自動で読了になった場合も）
-  アプリが書き直し、Obsidian で書き換えた値は DB の値に戻る。aliases など自分で足したキーは残る。
+- **frontmatter でアプリが書くのは `type: reading-report`・`book_id`・`updated`（アプリから本文を保存した時刻）の3つだけ**。書誌・状態・評価・タグは DB にだけあり、ファイルには書かない。本の書誌や状態を変えてもレポートのファイルは書き直さない。それ以外のキー（aliases や、2026-10-12 より前の版が書いた title〜tags）はユーザーのものとして保存しても残す（旧キーは `scripts/strip_report_frontmatter.py` で一度だけ取り除く）→ `docs/design/0001-storage-boundary.md`
   本文も frontmatter も変わらない保存では書き直さない（`updated` と mtime を動かさない）
 - `book_id` は `5` でも `"5"` でも読む。BOM 付きでも読む。本文が空のファイルは「レポート無し」
 - **同じ `book_id` のファイルが複数あるとき**（Obsidian の複製など）は mtime が最新のものを使い、
@@ -283,7 +304,7 @@ APIが足して返す値: `progress`（読んだ割合％。総ページ未設�
 - アプリのエディタと Obsidian で同じレポートを同時に開いて保存すると、後から保存したほうが残る
 - **ファイル名は最初に保存したときのタイトルで決まり、あとでタイトルを直しても改名しない**
   （2026-10-12）。テーマノートなどから手で張ったリンクを、アプリの改名で切らないため。
-  新しいタイトルは frontmatter の `title` に入る
+  新しいタイトルは DB にだけ入る
 
 ### テーマノート（`reports/themes/`、2026-10-12）
 
@@ -293,14 +314,14 @@ APIが足して返す値: `progress`（読んだ割合％。総ページ未設�
   frontmatter の `tags`（どれか1つでも持つ本）で、無ければファイル名をタグ名とみなす
 - アプリが書くのは `<!-- notes:books:start -->` 〜 `<!-- notes:books:end -->` の間だけ。
   中身は「このテーマの本」（レポートのある本は `../0013-….md` への相対 Markdown リンク、
-  無い本はリンクなし）と「関連するテーマ」（同じ本を持つ他のテーマノート）。マーカーが無ければ
-  末尾に足し、壊れていれば触らない。Obsidian ではレポート側のバックリンクにテーマノートが出る
+  無い本はリンクなし）と「関連するテーマ」（同じ本を持つ他のテーマノート）。マーカーは行全体がマーカーだけの行に限って数え、コードフェンス（三連バッククォートや `~~~` で囲んだ部分）の中は無視する。マーカーが無ければ
+  末尾に足し、壊れていれば触らずに警告を1回出す。Obsidian ではレポート側のバックリンクにテーマノートが出る
 - ハブ `themes/テーマ一覧.md` だけはアプリが作る。全テーマノートと、ノートのまだ無いタグを
   冊数つきで並べる
 - 更新はアプリの起動中に `ThemeWatcher` が5秒ごとに `rebuild()` を呼んで行う（Obsidian で
   ノートを作った・タグを書き換えたといった、API を通らない変化も拾うため）。中身が変わった
-  ときだけ書き、直近10秒以内に更新されたノートは書いている最中とみなして次の回に回す。
-  `NOTES_THEMES_WATCH=0` で止められる
+  ときだけ書き、直近10秒以内に更新されたノートは書いている最中とみなして次の回に回す。mtime が10秒以上未来のノート（同期のずれなど）は飛ばさずに書く。
+  `NOTES_THEMES_WATCH=0` で止められる（著者ノートも止まる）
 - リンクは相対 Markdown リンク（保存方針の規約）。Obsidian の設定「ファイルとリンク」で
   「Wikiリンクを使用」をオフ、「新規リンクの形式」を「ファイルからの相対パス」にしておくと、
   `[[` で補完しても同じ形で入る
@@ -308,6 +329,19 @@ APIが足して返す値: `progress`（読んだ割合％。総ページ未設�
 進捗と状態のつじつまは `_apply_progress_rules()` が1箇所で面倒を見る:
 `page >= total` なら読了にする → 読書中/読了になったら開始日を入れる → 読了なら読了日を入れる。
 日付はフォームから明示的に送られたときは上書きしない。
+
+### 著者ノート（`reports/authors/`、2026-10-12）
+
+著者ごとのノート。レポートを著者でつなぎ、Obsidian で「同じ著者のレポート」をたどれるようにする。`app/author_store.py`。テーマノートと同じマーカーの間だけをアプリが書く。
+
+- **著者の分け方**: `Book.author` を NFKC で正規化し、`,` `、` で分けて、末尾の役割表記（`／著`・`／訳`・`（編著）`・`[著]` など）を落とす。訳者も著者と同じに扱う。役割は保存しない。
+- **同じ人のまとめ方**: 照合は空白・`・` `.` `=` を除き casefold したキーで行う。「ダニエル・L・エヴェレット」と「ダニエル・L.エヴェレット」は同じ人になるが、「H.G. Wells」と「H・G・ウェルズ」は別の人になる。別表記は `aliases` で1つにまとめる。
+- **集める名前**: ノートのファイル名（拡張子を除く）と frontmatter の `aliases`。
+- **自動で作る**: レポートが1冊以上ある著者で、どのノートにも集められていない著者にだけ、`authors/<名前>.md`（`type: author-note`）をアプリが作る。レポートの無い著者はノートを作らず、ハブに冊数付きで出す。ユーザーが作ったノートは、レポートの有無に関係なく埋める。アプリはノートを改名も削除もしない。自動で作ったノートを消しても、その著者にレポートがある限り作り直される。
+- **マーカーの中**: 「この著者の本」（レポートのある本は相対リンク）と「関連するテーマ」（同じ本を含むテーマノート）。
+- **ハブ** `authors/著者一覧.md`: アプリが作る。ノートのある著者と、ノートの無い著者（冊数付き）を並べる。
+- **更新と止め方**: `ThemeWatcher` の周期（5秒ごと）に相乗りする。`NOTES_AUTHORS_WATCH=0` で著者ノートだけ止まる（`NOTES_THEMES_WATCH=0` は両方止まる）。
+- 分け方の規則・エッジケース・テストは → `docs/design/0002-author-notes.md`
 
 ### Note（引用・メモ）
 
@@ -439,7 +473,7 @@ Suggestion が本棚の1冊に紐づくのに対し、こちらは本に紐づ�
 | メソッド | パス | 説明 |
 |---|---|---|
 | GET | `/api/books?status=&sort=&tag=` | 一覧。`sort` を省くと設定の並び順に従う |
-| GET | `/api/books/{id}` | 詳細（`report_html` 込み） |
+| GET | `/api/books/{id}` | 詳細（`report_md` 込み） |
 | POST | `/api/books` | 登録（201） |
 | PATCH | `/api/books/{id}` | 部分更新（送った項目だけ） |
 | DELETE | `/api/books/{id}` | 削除（204） |
@@ -1009,6 +1043,7 @@ except anthropic.APIConnectionError: error = "APIに接続できませんでし�
   混むとタイムアウトする。これを空配列にすると、画面が「その本はありません」と
   嘘をつく。`SearchUnavailable` を投げて **503** にし、文言を分けた
 - **Alembic をまだ入れない**: 実データが無いうちは「DBを消して作り直す」で足りる。ノートが溜まって消せなくなった時点で導入する
+- **レポートの frontmatter に書誌を複製しない**（2026-10-12）: 同じ値が2か所にあると、どちらが正か紛らわしく、本の更新のたびにファイルが動く。持ち主を1か所にし、Obsidian からの導線はテーマノートと著者ノートで作る → `docs/design/0001-storage-boundary.md`
 
 ## 8. 進め方の約束
 

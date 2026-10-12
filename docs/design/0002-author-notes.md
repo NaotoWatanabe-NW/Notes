@@ -2,7 +2,7 @@
 
 ## 1. 状態・日付
 
-- 状態: 採用（未実装）
+- 状態: 実装済み（2026-10-12）
 - 日付: 2026-10-12
 - 依存: [0001](0001-storage-boundary.md) を先に実装する（`report_store.front_matter_text` を使う）
 - 関連: SPEC §4「テーマノート」、`backend/app/theme_store.py`

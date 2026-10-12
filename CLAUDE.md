@@ -41,7 +41,8 @@ Notes/
 │   ├── systemd-service.md      母艦の常駐（notes-web）の手順
 │   └── design/                 設計書（§8）
 ├── books.txt                   本のメモ（用途の記載なし。アプリは読まない）
-├── reports/                    読書レポートとテーマノート（git 管理外。§4）
+├── reports/                    読書レポート・テーマノート・著者ノート（git 管理外。§4）
+├── scripts/                    移行スクリプト（migrate_report_md_to_files.py / strip_report_frontmatter.py。一回限り）
 ├── Notes App Base Design/      デザインの正本（触らない）
 ├── .claude/
 │   ├── agents/                 サブエージェントの定義（§9）
@@ -51,12 +52,13 @@ Notes/
 │   ├── pytest.ini              テストは tests/ 以下
 │   ├── .env.example            .env にコピーして使う（GOOGLE_BOOKS_API_KEY）。.env と reading.db は git 管理外
 │   ├── app/
-│   │   ├── main.py             入口。lifespan（テーブル作成・列追加・テーマ更新の開始）、ルーター登録、SPA 配信
+│   │   ├── main.py             入口。lifespan（テーブル作成・列追加・テーマ・著者ノートの更新の開始）、ルーター登録、SPA 配信
 │   │   ├── database.py         engine・セッション・get_db・SQLite の PRAGMA・add_missing_columns
 │   │   ├── models.py           DB のテーブル定義（Book / Note / Reading / BookCover / Tag / Settings / Suggestion / Topic …）
 │   │   ├── schemas.py          API の入出力の型と入力チェック（ISBN の正規化もここ）
 │   │   ├── report_store.py     読書レポート（reports/<id>-<タイトル>.md）の読み書き・索引・ゴミ箱
 │   │   ├── theme_store.py      テーマノートとハブへの一覧の差し込み。ThemeWatcher（5秒ごと）
+│   │   ├── author_store.py     著者ノートとハブへの一覧の差し込み（部品は theme_store を使う）
 │   │   ├── booklookup.py       ISBN・書名から本を探す（openBD / Google Books / 国会図書館）。検索結果の10分キャッシュ
 │   │   ├── isbn.py             ISBN の正規化と検査（ハイフン除去・10→13桁・Kindle の ASIN を判定）
 │   │   ├── covers.py           手で入れる表紙を 600×900 以内の JPEG に縮める
@@ -102,7 +104,7 @@ Notes/
 
 ## 4. データの持ち主（DB と Markdown の境界）
 
-> 変更後の姿（進行中）。詳細は [0001 保存の境界](docs/design/0001-storage-boundary.md) と [0002 著者ノート](docs/design/0002-author-notes.md) に書く予定。設計書は実装の前に作る。
+> 実装済み（2026-10-12）。詳細は [0001 保存の境界](docs/design/0001-storage-boundary.md) と [0002 著者ノート](docs/design/0002-author-notes.md)。
 
 - **原則: 同じデータを2か所に保存しない。持ち主は1か所。**
 - **DB**（`backend/reading.db`、git 管理外）: 書誌・状態・進捗・評価・日付・タグ・引用/メモ・読了記録・表紙画像・次に読む本・キーワードのおすすめ・興味なし・設定
@@ -112,12 +114,14 @@ Notes/
     - 正の鍵は `book_id`。ファイル名は人が読むための飾りで、タイトルを直しても改名しない
     - 同じ `book_id` のファイルが複数あれば mtime が最新のものを使う。保存は主の1つにだけ書き、他は上書き・削除しない
   - テーマノート: `reports/themes/*.md`（タグごと。**ユーザーが作る**）
-  - 著者ノート: `reports/authors/*.md`（レポートのある著者はアプリが自動で作る。**未実装**。0002）
-- **ビュー（例外）**: テーマノート・著者ノート・ハブ `reports/themes/テーマ一覧.md` の `<!-- notes:books:start -->` 〜 `<!-- notes:books:end -->` の間は、DB から数秒ごとに作り直す一覧。アプリは読み戻さない。**手で編集しない**（マーカーの外は自由に書いてよい）
+  - 著者ノート: `reports/authors/*.md`（レポートのある著者はアプリが自動で作る。ユーザーが手で作ってもよい。0002）
+  - ハブ `reports/authors/著者一覧.md`（アプリが作る。ノートの無い著者を冊数つきで並べる）
+- **ビュー（例外）**: テーマノート・著者ノート・ハブ（`reports/themes/テーマ一覧.md`・`reports/authors/著者一覧.md`）の `<!-- notes:books:start -->` 〜 `<!-- notes:books:end -->` の間は、DB から数秒ごとに作り直す一覧。アプリは読み戻さない。**手で編集しない**（マーカーの外は自由に書いてよい）
+- **一覧の更新**: アプリの起動中、`ThemeWatcher` が5秒ごとに書き直す（Obsidian でノートを作った・タグを書き換えたといった API を通らない変化も拾う）。止めるときは `NOTES_THEMES_WATCH=0`（テーマと著者の両方）か `NOTES_AUTHORS_WATCH=0`（著者ノートだけ）
 - リンクは Wikiリンク（`[[ ]]`）ではなく**相対 Markdown リンク**
 - 書き込み: `report_store.write_lock`（flock。`reports/.write.lock`）の中で `write_atomic`（tmp に書く → fsync → `os.replace`）。読み手はロックを取らない
 - 削除はファイルを消さず `reports/.trash/` へ移す
-- **移行中の注意**: 現行コードの frontmatter は、書誌項目（title / author / isbn / genre / status / rating / started_on / finished_on / tags）も書き、値が変わるとアプリが書き直している（`report_store.build_markdown`）。DB の `books.report_md` 列は凍結コピーで、アプリは読み書きしない。上の「type・book_id・updated だけ」は移行後の姿
+- **旧い複製キーの移行**: 2026-10-12 より前の版が書いたレポートには、書誌項目（title / author / isbn / genre / status / rating / started_on / finished_on / tags）が frontmatter に残っている。既存ファイルからは `scripts/strip_report_frontmatter.py` で一度だけ取り除く（既定は下見。`--apply` で書く。本文は変えない）。**新しいコードをデプロイして再起動したあとに流す**（先に流すと、旧コードが次の本の更新でキーを書き戻す）。DB の `books.report_md` 列は凍結コピーで、アプリは読み書きしない（消す手順は 0001 §7.4。ユーザーの確認後）
 - `reports/`・`reading.db`・`backend/.env` はコミットしない（`.gitignore`。この repo は public）
 
 ## 5. よく使うコマンド
