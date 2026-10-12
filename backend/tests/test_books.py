@@ -218,17 +218,57 @@ def test_本を消すとレポートのファイルも消える(client, tmp_path
     assert _report_files(tmp_path) == []
 
 
-def test_本の書誌を直すとレポートのfrontmatterも追従する(client, tmp_path):
-    # Obsidian 側から読んだときに状態や採点が古いままにならないようにする
-    book = _create(client)
+@pytest.mark.parametrize(
+    "payload, expected",
+    [
+        ({"status": "finished", "rating": 5}, {"status": "finished", "rating": 5}),
+        ({"tags": ["設計", "入門"]}, {"tags": ["入門", "設計"]}),
+        # status を送らなくても、最後のページまで読めば読了・読了日が DB に入る
+        ({"page": 300}, {"page": 300, "status": "finished"}),
+        ({"title": "新しい題"}, {"title": "新しい題"}),
+    ],
+    ids=["status-rating", "tags", "page-auto-finish", "title"],
+)
+def test_本の書誌や状態を変えてもレポートのファイルは書き直さない(
+    client, tmp_path, payload, expected
+):
+    # 書誌は DB にだけある。レポートの frontmatter には複製しないので、
+    # 本を更新してもファイルの中身も mtime も動かない
+    book = _create(client, total=300)
     client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
-    client.patch(f"/api/books/{book['id']}", json={"status": "finished", "rating": 5})
+    (path,) = _report_files(tmp_path)
+    text_before = path.read_text(encoding="utf-8")
+    mtime_before = path.stat().st_mtime_ns
+
+    response = client.patch(f"/api/books/{book['id']}", json=payload)
+
+    assert response.status_code == 200
+    detail = client.get(f"/api/books/{book['id']}").json()
+    for key, value in expected.items():
+        got = sorted(detail[key]) if key == "tags" else detail[key]
+        assert got == value
+    assert path.read_text(encoding="utf-8") == text_before
+    assert path.stat().st_mtime_ns == mtime_before
+
+
+def test_レポートのfrontmatterはtype・book_id・updatedだけ(client, tmp_path):
+    book = _create(
+        client,
+        title="失敗の本質",
+        author="戸部良一",
+        isbn="9784122018334",
+        genre="academic",
+        status="finished",
+        rating=5,
+        tags=["組織論", "戦史"],
+    )
+    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
 
     (path,) = _report_files(tmp_path)
-    text_in_file = path.read_text(encoding="utf-8")
-    assert "status: finished" in text_in_file
-    assert "rating: 5" in text_in_file
-    assert "## 感想" in text_in_file
+    meta = yaml.safe_load(path.read_text(encoding="utf-8").split("---")[1])
+    assert list(meta) == ["type", "book_id", "updated"]
+    assert meta["type"] == "reading-report"
+    assert meta["book_id"] == book["id"]
 
 
 def test_ページ進捗の更新ではレポートのファイルを書き直さない(client, tmp_path):
@@ -241,30 +281,6 @@ def test_ページ進捗の更新ではレポートのファイルを書き直�
     client.patch(f"/api/books/{book['id']}", json={"page": 120})
 
     assert path.stat().st_mtime_ns == before
-
-
-def test_ページ数だけ送って自動で読了になるとレポートのfrontmatterも追従する(client, tmp_path):
-    # status を送っていなくても、最後のページまで読めば読了・読了日が入る
-    book = _create(client, total=300)
-    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
-    (path,) = _report_files(tmp_path)
-    assert "status: finished" not in path.read_text(encoding="utf-8")
-
-    client.patch(f"/api/books/{book['id']}", json={"page": 300})
-
-    text_in_file = path.read_text(encoding="utf-8")
-    assert "status: finished" in text_in_file
-    assert f"finished_on: {today_jst().isoformat()}" in text_in_file
-
-
-def test_タグを変えるとレポートのfrontmatterのタグも追従する(client, tmp_path):
-    book = _create(client)
-    client.patch(f"/api/books/{book['id']}", json={"report_md": "## 感想"})
-    client.patch(f"/api/books/{book['id']}", json={"tags": ["設計", "入門"]})
-
-    (path,) = _report_files(tmp_path)
-    meta = yaml.safe_load(path.read_text(encoding="utf-8").split("---")[1])
-    assert sorted(meta["tags"]) == ["入門", "設計"]
 
 
 def test_本を消すと同じidの複製レポートもゴミ箱へ移る(client, tmp_path):

@@ -153,22 +153,6 @@ def _with_counts(db: Session, books: list[Book]) -> list[Book]:
     return books
 
 
-# レポートの frontmatter に複製している書誌項目。この値が変わったときだけ
-# ファイルを書き直す（report_store.build_markdown と対応させる）。
-_REPORT_META_FIELDS = (
-    "title", "author", "isbn", "genre", "status", "rating",
-    "started_on", "finished_on",
-)
-
-
-def _report_meta_snapshot(book: Book) -> tuple:
-    """frontmatter に複製している値の現在の組。更新の前後で比べる。"""
-    return (
-        *(getattr(book, name) for name in _REPORT_META_FIELDS),
-        [tag.name for tag in book.tags],
-    )
-
-
 def _attach_report(book: Book) -> Book:
     """詳細（BookDetail）で返すレポート本文をファイルから読んで付ける。
 
@@ -239,7 +223,6 @@ def create_book(payload: BookCreate, db: Session = Depends(get_db)):
 def update_book(book_id: int, payload: BookUpdate, db: Session = Depends(get_db)):
     book = _get_book_or_404(db, book_id)
     was_finished = book.status == BookStatus.FINISHED
-    meta_before = _report_meta_snapshot(book)
 
     # exclude_unset=True で「送られてきた項目だけ」を取り出す
     changes = payload.model_dump(exclude_unset=True)
@@ -263,14 +246,10 @@ def update_book(book_id: int, payload: BookUpdate, db: Session = Depends(get_db)
     _commit(db)
     db.refresh(book)
 
-    # 本文の保存は DB のコミット後。frontmatter に載せる書誌が確定してから書く。
+    # 本文の保存は DB のコミット後（DB の更新が失敗したらファイルも書かない。
+    # 新しいファイル名に使うタイトルもここで確定している）。
     if report_sent:
         report_store.save(book, report_body)
-    elif _report_meta_snapshot(book) != meta_before:
-        # frontmatter の複製を追従させる。送られたキーではなく値の変化で見るのは、
-        # ページ進捗から自動で読了・読了日が入る場合も拾うため。ページ進捗だけで
-        # 何も変わらない更新では書き直さない（mtime が動くと週次コミットの差分がノイズになる）。
-        report_store.refresh_meta(book)
 
     _with_counts(db, [book])
     return _attach_report(book)

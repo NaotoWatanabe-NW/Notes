@@ -11,7 +11,6 @@ import threading
 from datetime import date
 
 import pytest
-import yaml
 
 from app import report_store
 from app.models import Book, BookStatus, Genre, Tag
@@ -41,7 +40,7 @@ class TestSaveAndRead:
         assert path.name == "0001-失敗の本質-日本軍の組織論的研究.md"
         assert report_store.read(1) == "## 第1章\n要点を書く。"
 
-    def test_front_matter_copies_the_bibliographic_fields(self, reports_dir):
+    def test_front_matter_has_only_type_book_id_and_updated(self, reports_dir):
         book = make_book(
             book_id=17,
             author="戸部良一",
@@ -55,26 +54,14 @@ class TestSaveAndRead:
         book.tags = [Tag(name="組織論"), Tag(name="戦史")]
         path = report_store.save(book, "本文")
 
-        meta, body = report_store.split_front_matter(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        meta, body = report_store.split_front_matter(text)
+        assert list(meta) == ["type", "book_id", "updated"]
         assert meta["type"] == "reading-report"
         assert meta["book_id"] == 17
-        assert meta["title"] == "失敗の本質 : 日本軍の組織論的研究"
-        assert meta["author"] == "戸部良一"
-        assert meta["isbn"] == "9784122018334"
-        assert meta["genre"] == "academic"
-        assert meta["status"] == "finished"
-        assert meta["rating"] == 5
-        assert meta["started_on"] == date(2026, 9, 1)
-        assert meta["finished_on"] == date(2026, 9, 20)
-        assert meta["tags"] == ["組織論", "戦史"]
+        for value in ("戸部良一", "9784122018334", "組織論", "戦史"):
+            assert value not in text
         assert body.strip() == "本文"
-
-    def test_title_with_colon_does_not_break_the_front_matter(self, reports_dir):
-        # ":" を含むタイトルを素で書くと YAML が壊れる。safe_dump で守る。
-        book = make_book(title="なぜ？: 問いの立て方")
-        path = report_store.save(book, "本文")
-        meta = yaml.safe_load(path.read_text(encoding="utf-8").split("---")[1])
-        assert meta["title"] == "なぜ？: 問いの立て方"
 
     def test_read_returns_none_when_there_is_no_report(self, reports_dir):
         assert report_store.read(1) is None
@@ -112,21 +99,25 @@ class TestSaveAndRead:
         assert path.stat().st_mtime_ns == before_mtime
         assert path.read_text(encoding="utf-8") == before_text
 
-    def test_rewrites_the_file_when_only_the_bibliography_changed(self, reports_dir):
+    def test_does_not_rewrite_the_file_when_only_the_bibliography_changed(self, reports_dir):
+        # 書誌は DB にだけある。本の評価や状態が変わってもファイルは動かない。
         book = make_book()
         path = report_store.save(book, "本文")
+        before_text = path.read_text(encoding="utf-8")
+        before_mtime = path.stat().st_mtime_ns
 
         book.rating = 4
+        book.status = BookStatus.FINISHED
         report_store.save(book, "本文")
 
-        meta, _ = report_store.split_front_matter(path.read_text(encoding="utf-8"))
-        assert meta["rating"] == 4
+        assert path.read_text(encoding="utf-8") == before_text
+        assert path.stat().st_mtime_ns == before_mtime
 
 
 class TestFilename:
     def test_keeps_the_file_name_when_the_title_changes(self, reports_dir):
         # テーマノートなどから手で張ったリンクを、アプリの改名で切らない。
-        # 新しいタイトルは frontmatter に入る。
+        # 新しいタイトルは DB にだけある。
         book = make_book(title="旧タイトル")
         old = report_store.save(book, "本文")
 
@@ -136,7 +127,7 @@ class TestFilename:
         assert path == old
         assert [p.name for p in reports_dir.glob("*.md")] == ["0001-旧タイトル.md"]
         meta, _ = report_store.split_front_matter(path.read_text(encoding="utf-8"))
-        assert meta["title"] == "新しいタイトル"
+        assert "title" not in meta
 
     def test_resolves_by_book_id_after_a_manual_rename(self, reports_dir):
         # Obsidian で改名されても、正の鍵は frontmatter の book_id なので追える。
@@ -179,27 +170,6 @@ class TestExternalEdits:
             "---\nbook_id: 9\n---\n下書き\n", encoding="utf-8"
         )
         assert report_store.has_report(9) is False
-
-
-class TestRefreshMeta:
-    def test_rewrites_front_matter_and_keeps_the_body(self, reports_dir):
-        book = make_book(status=BookStatus.READING)
-        report_store.save(book, "読みかけの感想")
-
-        book.status = BookStatus.FINISHED
-        book.rating = 4
-        report_store.refresh_meta(book)
-
-        meta, _ = report_store.split_front_matter(
-            report_store._index().path_of(1).read_text(encoding="utf-8")
-        )
-        assert meta["status"] == "finished"
-        assert meta["rating"] == 4
-        assert report_store.read(1) == "読みかけの感想"
-
-    def test_does_nothing_when_the_book_has_no_report(self, reports_dir):
-        assert report_store.refresh_meta(make_book()) is None
-        assert report_store.book_ids_with_report() == set()
 
 
 class TestDelete:
@@ -345,21 +315,25 @@ class TestTrash:
         assert len(list((reports_dir / ".trash").iterdir())) == 1
 
 
-class TestRefreshMetaDoesNotLoseConcurrentSave:
-    def test_keeps_a_body_written_while_refresh_waits_for_the_lock(self, reports_dir):
+class TestLocking:
+    def test_save_keeps_a_user_key_added_while_it_waits_for_the_lock(self, reports_dir):
+        # frontmatter はロックを取ってから読む。待っている間に足されたキーを、
+        # 先に読んだ古い内容で消してしまわない
         book = make_book()
         path = report_store.save(book, "古い本文")
 
         lock_file = open(reports_dir / report_store.LOCK_NAME, "w")
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        thread = threading.Thread(target=report_store.refresh_meta, args=(book,))
+        thread = threading.Thread(target=report_store.save, args=(book, "新しい本文"))
         try:
             thread.start()
             thread.join(timeout=0.3)
             assert thread.is_alive()  # ロックを待っている
-            # 待っている間に、別の保存が完了した状態を再現する
+            # 待っている間に、Obsidian でキーを足した状態を再現する
             path.write_text(
-                path.read_text(encoding="utf-8").replace("古い本文", "新しい本文"),
+                path.read_text(encoding="utf-8").replace(
+                    "\n---\n", "\naliases:\n- 別名\n---\n", 1
+                ),
                 encoding="utf-8",
             )
         finally:
@@ -368,6 +342,8 @@ class TestRefreshMetaDoesNotLoseConcurrentSave:
         thread.join(timeout=5)
 
         assert not thread.is_alive()
+        meta, _ = report_store.split_front_matter(path.read_text(encoding="utf-8"))
+        assert meta["aliases"] == ["別名"]
         assert report_store.read(1) == "新しい本文"
 
     def test_delete_looks_up_the_path_after_taking_the_lock(self, reports_dir):
@@ -431,7 +407,7 @@ class TestUserFrontMatterKeys:
         assert meta["cssclasses"] == "wide"
         assert report_store.read(1) == "直した本文"
 
-    def test_refresh_meta_keeps_user_keys_and_puts_them_after_the_app_keys(self, reports_dir):
+    def test_save_puts_user_keys_after_the_app_keys(self, reports_dir):
         book = make_book(title="Foo")
         path = report_store.save(book, "本文")
         path.write_text(
@@ -439,25 +415,29 @@ class TestUserFrontMatterKeys:
             encoding="utf-8",
         )
 
-        book.status = BookStatus.FINISHED
-        report_store.refresh_meta(book)
+        report_store.save(book, "別の本文")
 
         meta, _ = report_store.split_front_matter(path.read_text(encoding="utf-8"))
         assert meta["zzz"] == 1
-        assert meta["status"] == "finished"
         keys = list(meta)
-        assert keys[0] == "type" and keys[-1] == "zzz"
+        assert keys[:3] == ["type", "book_id", "updated"] and keys[-1] == "zzz"
+        assert report_store.read(1) == "別の本文"
 
-    def test_app_values_overwrite_what_was_edited_in_obsidian(self, reports_dir):
-        book = make_book(title="Foo")
-        path = report_store.save(book, "本文")
-        path.write_text(
-            path.read_text(encoding="utf-8").replace("title: Foo", "title: 勝手に直した"),
-            encoding="utf-8",
+    def test_save_keeps_legacy_bibliographic_keys_as_they_are(self, reports_dir):
+        # 旧版が書いた title〜tags は、ユーザーが足したキーと区別できない。
+        # 保存では消さない（消すのは移行スクリプトだけ）。
+        path = _write_report(
+            reports_dir, "0001-Foo.md", 1,
+            extra_front="type: reading-report\ntitle: 勝手に直した\nstatus: reading\ntags: [a]\n",
         )
-        report_store.refresh_meta(book)
+
+        report_store.save(make_book(book_id=1, title="Foo", status=BookStatus.FINISHED), "別の本文")
+
         meta, _ = report_store.split_front_matter(path.read_text(encoding="utf-8"))
-        assert meta["title"] == "Foo"
+        assert meta["title"] == "勝手に直した"
+        assert meta["status"] == "reading"
+        assert meta["tags"] == ["a"]
+        assert report_store.read(1) == "別の本文"
 
 
 class TestBom:

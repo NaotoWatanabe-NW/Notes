@@ -22,11 +22,12 @@ Obsidian で改名されても索引は壊れない。ファイル名は最初�
 手で張った相対リンクが、アプリの改名で切れないようにするため（Obsidian は自分で改名した
 ときしかリンクを直さない）。
 
-frontmatter の書誌項目（title / author / status / rating / tags …）は、**DB の値を
-ファイル単体で読めるようにするための複製**。正は DB 側で、レポートの保存時と
-本の更新時にアプリが書き直す。Obsidian 側でこれらを書き換えても、次の保存で
-アプリの値に戻る。一方、ユーザーが足した別のキー（aliases / cssclasses など）は
-書き直しても残す。
+frontmatter でアプリが書くのは `type` / `book_id` / `updated` の3つだけ。書誌
+（title / author / status / rating / tags …）は DB にだけあり、ファイルには複製しない
+（`docs/design/0001-storage-boundary.md`）。同じ値が2か所にあると、どちらが正か紛らわしく、
+本の更新のたびにファイルが動くため。本を更新してもレポートのファイルは書き直さない。
+それ以外のキー（aliases / cssclasses など。旧版が書いた title〜tags も含む）はユーザーの
+ものとして、保存しても残す。
 
 同じ `book_id` のファイルが複数あることがある（Obsidian での複製 "0005-Foo 1.md" など）。
 読み出しに使う「主」は **mtime が最も新しいもの**（同値ならパス名順）で、主を消せば
@@ -53,7 +54,7 @@ import re
 import threading
 from dataclasses import dataclass
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional
 
@@ -100,14 +101,6 @@ def split_front_matter(text: str) -> tuple[dict, str]:
     return meta, text[match.end():]
 
 
-def _tag_names(book) -> list[str]:
-    return [tag.name if hasattr(tag, "name") else str(tag) for tag in (book.tags or [])]
-
-
-def _enum_value(value):
-    return getattr(value, "value", value)
-
-
 class _ReportDumper(yaml.SafeDumper):
     """日時を ISO 8601（`T` 区切り）の裸のスカラーとして書く SafeDumper。
 
@@ -125,25 +118,16 @@ _ReportDumper.add_representer(datetime, _represent_datetime)
 
 
 def build_markdown(book, body: str, extra: Optional[dict] = None) -> str:
-    """frontmatter（DB の値の複製）＋ 本文 の Markdown を組み立てる。
+    """frontmatter ＋ 本文 の Markdown を組み立てる。
 
-    `extra` は既存ファイルの frontmatter。複製項目はアプリの値で上書きし、
-    それ以外のキー（ユーザーが足したもの）は複製項目の後ろに元の順で残す。
-
-    値に ":" や改行が入っても壊れないよう YAML として書く（`front_matter_text`）。
+    アプリのキーは `type` / `book_id` / `updated` の3つだけ。`extra`（既存ファイルの
+    frontmatter）のそれ以外のキーはユーザーのものとして、3つの後ろに元の順で残す。
+    旧版が書いた title〜tags もここでは消さない（`scripts/strip_report_frontmatter.py`
+    が一度だけ取り除く）。
     """
     meta = {
         "type": REPORT_TYPE,
         "book_id": book.id,
-        "title": book.title,
-        "author": book.author or None,
-        "isbn": book.isbn or None,
-        "genre": _enum_value(getattr(book, "genre", None)),
-        "status": _enum_value(book.status),
-        "rating": book.rating,
-        "started_on": book.started_on,
-        "finished_on": book.finished_on,
-        "tags": _tag_names(book),
         "updated": datetime.now().astimezone().replace(microsecond=0),
     }
     for key, value in (extra or {}).items():
@@ -395,8 +379,8 @@ def _same_except_updated(new_text: str, old_text: str) -> bool:
     return new_meta == old_meta and new_body.strip() == old_body.strip()
 
 
-def _save_locked(book, body: Optional[str]) -> Optional[Path]:
-    """`write_lock` を取った状態で呼ぶ。body が None なら主の本文をそのまま使う。
+def _save_locked(book, body: str) -> Path:
+    """`write_lock` を取った状態で呼ぶ。
 
     既にレポートがあれば主にそのまま書く（タイトルが変わっていても改名しない）。
     新規なら `filename_for` の名前、それが埋まっていれば衝突しない別名にする。
@@ -413,11 +397,7 @@ def _save_locked(book, body: Optional[str]) -> Optional[Path]:
             current_text = _read_text(current)
         except (OSError, UnicodeDecodeError):
             current_text = ""
-        extra, current_body = split_front_matter(current_text)
-        if body is None:
-            body = current_body
-    if body is None or not body.strip():
-        return None
+        extra, _ = split_front_matter(current_text)
 
     if current is not None:
         dest = current
@@ -470,8 +450,8 @@ def save(book, body: Optional[str]) -> Optional[Path]:
     """レポート本文を保存する。空文字・None なら削除（ゴミ箱へ）する。
 
     タイトルが変わっていてもファイル名は変えない（手で張ったリンクを切らないため）。
-    既存ファイルの frontmatter のうち複製項目はアプリの値で上書きし、ユーザーが
-    足したキーは残す。
+    既存ファイルの frontmatter は `type` / `book_id` / `updated` だけをアプリの値に
+    し、ユーザーが足したキーは残す。
     """
     if body is None or not body.strip():
         delete(book.id)
@@ -479,18 +459,6 @@ def save(book, body: Optional[str]) -> Optional[Path]:
 
     with write_lock(reports_dir()):
         return _save_locked(book, body)
-
-
-def refresh_meta(book) -> Optional[Path]:
-    """本文はそのままに、frontmatter（DB の値の複製）だけ書き直す。
-
-    本のタイトル・状態・採点を変えたときに呼ぶ。レポートが無い本では何もしない。
-    複製項目は DB が正なので、Obsidian 側で書き換えた値もアプリの値に戻る。
-    本文の読み出しから書き込みまでを1つのロックの中で行う（読んだあとに完了した
-    別の保存を古い本文で上書きしないため）。
-    """
-    with write_lock(reports_dir()):
-        return _save_locked(book, None)
 
 
 def delete(book_id: int) -> bool:
