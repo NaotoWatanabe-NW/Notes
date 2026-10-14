@@ -6,6 +6,7 @@
 - 日付: 2026-10-12
 - 依存: [0001](0001-storage-boundary.md) を先に実装する（`report_store.front_matter_text` を使う）
 - 関連: SPEC §4「テーマノート」、`backend/app/theme_store.py`
+- 著者の分け方は [0005](0005-author-split-rules.md) で変更（2026-10-14）
 
 ## 2. 背景と目的
 

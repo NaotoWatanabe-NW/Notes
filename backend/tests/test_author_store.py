@@ -107,10 +107,11 @@ def line_of(text, needle):
 class TestSplitAuthors:
     def test_splits_on_ascii_fullwidth_and_ideographic_commas(self):
         # 半角 , のほか、全角 ，（U+FF0C）・読点 、（U+3001）・半角読点 ､（U+FF64）で分かれる
-        assert author_store.split_authors("A，B、C､D, E") == ["A", "B", "C", "D", "E"]
+        # （1文字の英字はイニシャルとして落ちる（0005）ので、漢字の名前で確かめる）
+        assert author_store.split_authors("山田，鈴木、佐藤､田中, 伊藤") == ["山田", "鈴木", "佐藤", "田中", "伊藤"]
 
     @pytest.mark.parametrize("raw, expected", [
-        ("ダニエル・Ｌ・エヴェレット", "ダニエル・L・エヴェレット"),
+        ("ＨＧ　Ｗｅｌｌｓ", "HG Wells"),
         ("渡辺　照宏 ", "渡辺 照宏"),
         ("渡辺   照宏", "渡辺 照宏"),
     ])
@@ -170,8 +171,16 @@ class TestSplitAuthors:
         "山田 文",
         "山田 (東京, 大阪), 佐藤",
         "山田 (著, 鈴木",
-        "A，B、C､D, E",
+        "山田，鈴木、佐藤､田中, 伊藤",
         "ダニエル・Ｌ・エヴェレット, 松浦俊輔",
+        "熊野純彦・大澤真幸",
+        "Ｈ・Ｇ・ウェルズ",
+        "ｻﾗ･ｲﾏﾘ･ｳｫｰｶｰ",
+        "山田太郎 (著・編集), 楊・文",
+        "ジョン・スミス・Jr.",
+        "山田 (東京・大阪)",
+        "かこさとし 作・絵, 山田太郎・鈴木花子 編・著, かこさとし／作・絵",
+        "NHK「ヒューマン・ドキュメント」取材班, 【山田・鈴木】, 山田",
         "ゼロ幅\u200b空白, 結合\u0301文字",
         "H.G. Wells, ＨＧ Ｗｅｌｌｓ",
         "a: b, A/B, Ab*Cd, ABC*",
@@ -208,6 +217,88 @@ class TestSplitAuthors:
         # ファイル名にはできない（note_stem が空）が、著者としては残してハブに出す
         assert author_store.split_authors("???") == ["???"]
 
+    def test_中黒で著者を分ける(self):
+        assert author_store.split_authors("熊野純彦・大澤真幸") == ["熊野純彦", "大澤真幸"]
+
+    def test_半角の中黒もNFKCで中黒になって区切りになる(self):
+        assert author_store.split_authors("ｻﾗ･ｲﾏﾘ･ｳｫｰｶｰ") == ["サラ", "イマリ", "ウォーカー"]
+
+    def test_U_00B7の中点は区切りにしない(self):
+        # NFKC で・（U+30FB）にならない別の文字。区切りにすると欧文の名前が割れる
+        assert author_store.split_authors("ジョン·スミス") == ["ジョン·スミス"]
+
+    @pytest.mark.parametrize("raw, expected", [
+        ("ダニエル・Ｌ・エヴェレット, 松浦俊輔", ["ダニエル", "エヴェレット", "松浦俊輔"]),
+        ("トマス・S・クーン", ["トマス", "クーン"]),
+    ])
+    def test_名前の一部の中黒でも分ける(self, raw, expected):
+        assert author_store.split_authors(raw) == expected
+
+    @pytest.mark.parametrize("raw, expected", [
+        ("Ｈ・Ｇ・ウェルズ", ["ウェルズ"]),
+        ("ダニエル・L.・エヴェレット", ["ダニエル", "エヴェレット"]),
+        ("L", []),
+        ("H・G", []),
+        ("A, B", []),
+    ])
+    def test_英字1文字のイニシャルは名前にしない(self, raw, expected):
+        assert author_store.split_authors(raw) == expected
+
+    @pytest.mark.parametrize("raw, expected", [
+        ("楊・文", ["楊", "文"]),
+        ("茸本朗, HS", ["茸本朗", "HS"]),
+        ("Ｊ．Ｋ．ローリング", ["J.K.ローリング"]),
+    ])
+    def test_漢字やかなの1文字と英字2文字以上とつないだイニシャルは残す(self, raw, expected):
+        assert author_store.split_authors(raw) == expected
+
+    def test_イコールでは分けない(self):
+        assert author_store.split_authors("クロード・レヴィ＝ストロース") == ["クロード", "レヴィ=ストロース"]
+
+    @pytest.mark.parametrize("raw, expected", [
+        ("山田太郎 (著・編集)", ["山田太郎"]),
+        ("山田太郎（著・編）, 鈴木花子 (翻訳)", ["山田太郎", "鈴木花子"]),
+        ("山田 (東京・大阪)", ["山田 (東京・大阪)"]),
+    ])
+    def test_括弧の中の中黒では分けず役割の並びなら括弧ごと落とす(self, raw, expected):
+        assert author_store.split_authors(raw) == expected
+
+    def test_中黒で分けたあとも断片ごとに役割表記を落とす(self):
+        assert author_store.split_authors("山田太郎 著・鈴木花子 訳") == ["山田太郎", "鈴木花子"]
+
+    @pytest.mark.parametrize("raw, expected", [
+        ("かこさとし 作・絵", ["かこさとし"]),
+        ("山田太郎 文・絵", ["山田太郎"]),
+        ("中村元 訳・解説", ["中村元"]),
+        ("山田太郎 編・著", ["山田太郎"]),
+        ("山田太郎 監修・著", ["山田太郎"]),
+        ("かこさとし／作・絵", ["かこさとし"]),
+        ("かこさとし 作・絵, 中村元 訳・解説", ["かこさとし", "中村元"]),
+        ("山田太郎・鈴木花子 編・著", ["山田太郎", "鈴木花子"]),
+    ])
+    def test_空白のあとの中黒でつないだ役割の並びは丸ごと落とす(self, raw, expected):
+        # 分けると `絵` `解説` `著` が名前の断片として残り、別の人どうしをつなぐ「著者」になってしまう
+        assert author_store.split_authors(raw) == expected
+
+    def test_中黒でつないだ語が役割だけでなければ落とさない(self):
+        # `文` `絵` は名前にも役割にもなる。役割の並びを丸ごと落とすのは、末尾が役割の語だけのときに限る
+        assert author_store.split_authors("山田 文・鈴木 絵") == ["山田 文", "鈴木 絵"]
+
+    @pytest.mark.parametrize("raw, expected", [
+        ("NHK「ヒューマン・ドキュメント」取材班", ["NHK「ヒューマン・ドキュメント」取材班"]),
+        ("【山田・鈴木】", ["【山田・鈴木】"]),
+        ("『ハリー・ポッター』制作班, 山田", ["『ハリー・ポッター』制作班", "山田"]),
+        ("〈ジョン・スミス〉編集部", ["〈ジョン・スミス〉編集部"]),
+        ("《ジョン・スミス》編集部", ["《ジョン・スミス》編集部"]),
+        ("「甲, 乙」編集部, 丙", ["「甲, 乙」編集部", "丙"]),
+    ])
+    def test_かぎ括弧やすみ付き括弧の中の区切りでは分けない(self, raw, expected):
+        assert author_store.split_authors(raw) == expected
+
+    def test_閉じていないかぎ括弧は後ろの著者を飲み込まない(self):
+        assert author_store.split_authors("NHK「ヒューマン・ドキュメント, 山田") == [
+            "NHK「ヒューマン", "ドキュメント", "山田"]
+
 
 class TestAuthorKey:
     @pytest.mark.parametrize("a, b", [
@@ -228,6 +319,15 @@ class TestAuthorKey:
     def test_keeps_different_scripts_apart(self):
         # 別の文字種の表記は別の著者。ユーザーが aliases でまとめる
         assert author_store.author_key("H.G. Wells") != author_store.author_key("H・G・ウェルズ")
+
+    def test_中黒を含む出版社名のキーは分けた名前のキーをつないだものと同じ(self):
+        # 出版社欄は分けずに author_key をかける。著者欄の側は `・` で分けた名前を並べて比べるので、
+        # キーが `・` を除くことが、`・` を含む出版社名を著者から外せる前提になる（0005）
+        publisher = "ディスカヴァー・トゥエンティワン"
+        parts = author_store.split_authors(publisher)
+
+        assert len(parts) == 2
+        assert author_store.author_key(publisher) == "".join(author_store.author_key(n) for n in parts)
 
 
 class TestNoteStem:
@@ -299,6 +399,17 @@ class TestNoteNames:
 
         assert author_store.note_names(meta, "渡辺照宏") == ("渡辺照宏", "別名", "べつ めい")
 
+    def test_ファイル名とaliasesの中黒も著者欄と同じに分ける(self):
+        assert author_store.note_names({}, "ダニエル・L・エヴェレット") == ("ダニエル", "エヴェレット")
+        assert author_store.note_names({"aliases": ["H・G・ウェルズ"]}, "H.G. Wells") == ("H.G. Wells", "ウェルズ")
+
+    def test_出版社の名前でもノートの名前からは落とさない(self):
+        # 出版社の除外は本を見る collect_authors だけ。ノートの名前は DB に依存させない
+        assert author_store.note_names({}, "学研プラス") == ("学研プラス",)
+
+    def test_イニシャルだけのファイル名のノートは何も集めない(self):
+        assert author_store.note_names({}, "L") == ()
+
 
 class TestCollectAuthors:
     def test_uses_the_spelling_of_the_book_with_the_smallest_id(self, db, shelf):
@@ -317,13 +428,72 @@ class TestCollectAuthors:
 
         collected = author_store.collect_authors([book])
 
-        assert [a.name for a in collected.values()] == ["ダニエル・L・エヴェレット", "松浦俊輔"]
+        assert [a.name for a in collected.values()] == ["ダニエル", "エヴェレット", "松浦俊輔"]
         assert all(a.books == (book,) for a in collected.values())
 
     def test_skips_a_book_without_an_author(self, db, shelf):
         books = [shelf.add("著者なし"), shelf.add("区切りだけ", author=" , 、 ")]
 
         assert author_store.collect_authors(books) == {}
+
+    def test_出版社と同じ名前は著者にしない(self, db, shelf):
+        book = shelf.add("野草・山菜・きのこ図鑑", author="茸本朗, HS", publisher="HS")
+
+        collected = author_store.collect_authors([book])
+
+        assert [a.name for a in collected.values()] == ["茸本朗"]
+
+    def test_別の本の出版社の名前も著者にしない(self, db, shelf):
+        # 出版社欄が空の本の著者欄に出版社名があっても、渡された本のどれかの出版社欄と同じなら外す
+        books = [shelf.add("野草・山菜・きのこ図鑑", author="茸本朗, HS"),
+                 shelf.add("別の本", author="山田", publisher="HS")]
+
+        collected = author_store.collect_authors(books)
+
+        assert set(collected) == {author_store.author_key("茸本朗"), author_store.author_key("山田")}
+
+    def test_著者が出版社だけの本はどの著者にも入らない(self, db, shelf):
+        book = shelf.add("決定版 図説 旧約・新約聖書", author="学研プラス", publisher="学研プラス")
+
+        assert author_store.collect_authors([book]) == {}
+
+    def test_出版社の照合は全角半角や大文字小文字の違いを同じに見る(self, db, shelf):
+        book = shelf.add("図鑑", author="茸本朗, HS", publisher="ｈｓ")
+
+        collected = author_store.collect_authors([book])
+
+        assert [a.name for a in collected.values()] == ["茸本朗"]
+
+    def test_中黒を含む出版社名は分けた名前の並びごと落とす(self, db, shelf):
+        book = shelf.add("本", author="山田太郎・ディスカヴァー・トゥエンティワン 編",
+                         publisher="ディスカヴァー・トゥエンティワン")
+
+        collected = author_store.collect_authors([book])
+
+        assert [a.name for a in collected.values()] == ["山田太郎"]
+
+    def test_出版社名の一部だけの名前は落とさない(self, db, shelf):
+        book = shelf.add("本", author="ディスカヴァー", publisher="ディスカヴァー・トゥエンティワン")
+
+        collected = author_store.collect_authors([book])
+
+        assert [a.name for a in collected.values()] == ["ディスカヴァー"]
+
+    def test_株式会社の付いた出版社名とは一致しない(self, db, shelf):
+        # 出版社欄は文字列全体で比べ、会社の種類の語は落とさない（0005 §9 の未決事項）
+        book = shelf.add("本", author="学研プラス", publisher="株式会社学研プラス")
+
+        collected = author_store.collect_authors([book])
+
+        assert [a.name for a in collected.values()] == ["学研プラス"]
+
+    @pytest.mark.parametrize("publisher", [None, "", "  "])
+    def test_出版社欄が空や空白だけの本は何も外さない(self, db, shelf, publisher):
+        book = shelf.add("本", author="茸本朗, HS", publisher=publisher)
+
+        collected = author_store.collect_authors([book])
+
+        assert [a.name for a in collected.values()] == ["茸本朗", "HS"]
 
 
 class TestCreate:
@@ -332,10 +502,10 @@ class TestCreate:
 
         rebuild(db)
 
-        assert note_names_in(authors) == ["ダニエル・L・エヴェレット.md", "松浦俊輔.md"]
-        text = read(authors / "ダニエル・L・エヴェレット.md")
+        assert note_names_in(authors) == ["エヴェレット.md", "ダニエル.md", "松浦俊輔.md"]
+        text = read(authors / "ダニエル.md")
         assert text.startswith(
-            "---\ntype: author-note\n---\n\n# ダニエル・L・エヴェレット\n\n" + START)
+            "---\ntype: author-note\n---\n\n# ダニエル\n\n" + START)
         assert text.rstrip().endswith(END)
         assert "- [言語の起源](../0013-言語の起源.md)" in text
 
@@ -581,42 +751,42 @@ class TestCreateWithInvisibleCharacters:
 class TestCreateWaitsForSettledNotes:
     """ノートの名前（aliases）を確かに読めない回は、自動作成を控える。"""
 
-    MERGED = "---\naliases: [H・G・ウェルズ]\n---\n\n# ウェルズ\n\n自分のメモ\n"
+    MERGED = "---\naliases: [H・G・ウェルズ]\n---\n\n# Wells\n\n自分のメモ\n"
 
     def _wells(self, shelf):
-        # H・G・ウェルズ の本は、ウェルズ.md の aliases でまとめてある
+        # H・G・ウェルズ の本は、Wells.md の aliases でまとめてある
         shelf.add_with_report("世界文化小史", author="Ｈ・Ｇ・ウェルズ")
 
     @pytest.mark.parametrize("label, midway", [
-        ("yaml-bracket-not-closed", "---\naliases: [H・G・ウェルズ, \n---\n\n# ウェルズ\n"),
-        ("frontmatter-not-closed", "---\naliases: [H・G・ウェルズ]\n\n# ウェルズ\n"),
+        ("yaml-bracket-not-closed", "---\naliases: [H・G・ウェルズ, \n---\n\n# Wells\n"),
+        ("frontmatter-not-closed", "---\naliases: [H・G・ウェルズ]\n\n# Wells\n"),
         ("empty-file", ""),
         ("only-whitespace", "\n\n"),
     ])
     def test_does_not_recreate_a_merged_author_while_the_note_is_being_edited(
             self, db, shelf, authors, label, midway):
         self._wells(shelf)
-        note = write_note(authors, "ウェルズ.md", self.MERGED)
+        note = write_note(authors, "Wells.md", self.MERGED)
         rebuild(db)
-        assert note_names_in(authors) == ["ウェルズ.md"]
+        assert note_names_in(authors) == ["Wells.md"]
 
         note.write_text(midway, encoding="utf-8")   # 編集の途中で自動保存された
         rebuild(db)
-        assert note_names_in(authors) == ["ウェルズ.md"]
+        assert note_names_in(authors) == ["Wells.md"]
 
         note.write_text(self.MERGED, encoding="utf-8")   # 直した後も、作られたままにならない
         rebuild(db)
         rebuild(db)
-        assert note_names_in(authors) == ["ウェルズ.md"]
+        assert note_names_in(authors) == ["Wells.md"]
 
     def test_does_not_recreate_a_merged_author_when_the_note_cannot_be_decoded(self, db, shelf, authors):
         self._wells(shelf)
-        (authors / "ウェルズ.md").write_bytes(b"---\naliases: [H\xff]\n---\n")
+        (authors / "Wells.md").write_bytes(b"---\naliases: [H\xff]\n---\n")
 
         rebuild(db)
 
-        assert note_names_in(authors) == ["ウェルズ.md"]
-        assert [path.name for path, _ in author_store.scan_notes(authors).doubts] == ["ウェルズ.md"]
+        assert note_names_in(authors) == ["Wells.md"]
+        assert [path.name for path, _ in author_store.scan_notes(authors).doubts] == ["Wells.md"]
 
     @pytest.mark.parametrize("offset, created", [
         (0, False),        # 保存した直後
@@ -627,23 +797,23 @@ class TestCreateWaitsForSettledNotes:
     ])
     def test_waits_while_any_note_was_just_edited(self, db, shelf, authors, offset, created):
         self._wells(shelf)
-        write_note(authors, "ウェルズ.md", "# ウェルズ\n\n（aliases はまだ書いていない）\n")
-        mtime = (authors / "ウェルズ.md").stat().st_mtime
+        write_note(authors, "Wells.md", "# Wells\n\n（aliases はまだ書いていない）\n")
+        mtime = (authors / "Wells.md").stat().st_mtime
 
         author_store.rebuild(db, quiet_seconds=60, now=mtime + offset)
 
-        assert ("H・G・ウェルズ.md" in note_names_in(authors)) is created
+        assert ("ウェルズ.md" in note_names_in(authors)) is created
 
     def test_a_note_waiting_in_one_place_stops_the_creation_for_every_author(self, db, shelf, authors):
         shelf.add_with_report("お経の話", author="渡辺照宏")
         shelf.add("別の本", author="松浦俊輔")
-        broken = write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ, \n---\n")
+        broken = write_note(authors, "Wells.md", "---\naliases: [H・G・ウェルズ, \n---\n")
         plain = write_note(authors, "松浦俊輔.md", "# 松浦俊輔\n")
 
         written = rebuild(db)
 
         # 書き直しとハブは行う。作るのだけ控える
-        assert note_names_in(authors) == ["ウェルズ.md", "松浦俊輔.md"]
+        assert note_names_in(authors) == ["Wells.md", "松浦俊輔.md"]
         assert "別の本" in read(plain)
         assert plain in written and authors / HUB_NAME in written
         assert "- 渡辺照宏 — 1冊（レポート 1）" in read(authors / HUB_NAME)
@@ -651,13 +821,13 @@ class TestCreateWaitsForSettledNotes:
         # ノートが直れば、次の回に作る
         broken.write_text("---\naliases: [H・G・ウェルズ]\n---\n", encoding="utf-8")
         rebuild(db)
-        assert note_names_in(authors) == ["ウェルズ.md", "松浦俊輔.md", "渡辺照宏.md"]
+        assert note_names_in(authors) == ["Wells.md", "松浦俊輔.md", "渡辺照宏.md"]
 
     def test_warns_once_about_a_note_that_keeps_stopping_the_creation(self, db, shelf, authors, caplog):
         # 壊れたままのノートは、直すまで自動作成を止め続ける。黙っていると理由が分からないので、
         # 2回続けて残っていたら1回だけ警告する（書きかけで数秒だけ壊れている回では警告しない）
         shelf.add_with_report("お経の話", author="渡辺照宏")
-        broken = write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ, \n---\n")
+        broken = write_note(authors, "Wells.md", "---\naliases: [H・G・ウェルズ, \n---\n")
 
         def warnings():
             return [r for r in caplog.records
@@ -669,11 +839,11 @@ class TestCreateWaitsForSettledNotes:
             rebuild(db)
             rebuild(db)
             assert len(warnings()) == 1
-            assert "ウェルズ.md" in warnings()[0].getMessage()
+            assert "Wells.md" in warnings()[0].getMessage()
 
             broken.write_text("---\naliases: [H・G・ウェルズ]\n---\n", encoding="utf-8")
             rebuild(db)
-            assert note_names_in(authors) == ["ウェルズ.md", "渡辺照宏.md"]
+            assert note_names_in(authors) == ["Wells.md", "渡辺照宏.md"]
 
             broken.write_text("---\naliases: [H・G・ウェルズ, \n---\n", encoding="utf-8")
             rebuild(db)
@@ -682,30 +852,30 @@ class TestCreateWaitsForSettledNotes:
 
     def test_a_note_with_a_valid_frontmatter_does_not_make_it_wait(self, db, shelf, authors):
         shelf.add_with_report("お経の話", author="渡辺照宏")
-        write_note(authors, "ウェルズ.md", self.MERGED)
+        write_note(authors, "Wells.md", self.MERGED)
 
         rebuild(db)
 
-        assert note_names_in(authors) == ["ウェルズ.md", "渡辺照宏.md"]
+        assert note_names_in(authors) == ["Wells.md", "渡辺照宏.md"]
 
     def test_a_note_without_a_frontmatter_does_not_make_it_wait(self, db, shelf, authors):
         shelf.add_with_report("お経の話", author="渡辺照宏")
-        write_note(authors, "ウェルズ.md", "# ウェルズ\n\n本文だけ。\n")
+        write_note(authors, "Wells.md", "# Wells\n\n本文だけ。\n")
 
         rebuild(db)
 
-        assert note_names_in(authors) == ["ウェルズ.md", "渡辺照宏.md"]
+        assert note_names_in(authors) == ["Wells.md", "渡辺照宏.md"]
 
 
 class TestScanNotes:
     def test_reads_the_names_and_the_mtime_of_each_note(self, authors):
-        note = write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ]\n---\n")
+        note = write_note(authors, "Wells.md", "---\naliases: [H・G・ウェルズ]\n---\n")
         os.utime(note, (1_000_000, 1_000_000))
 
         scan = author_store.scan_notes(authors)
 
         assert [(n.path.name, n.names, n.mtime) for n in scan.notes] == [
-            ("ウェルズ.md", ("ウェルズ", "H・G・ウェルズ"), 1_000_000)]
+            ("Wells.md", ("Wells", "ウェルズ"), 1_000_000)]
         assert scan.doubts == []
 
     def test_a_symlink_that_points_to_itself_hides_only_itself(self, authors):
@@ -721,16 +891,16 @@ class TestScanNotes:
     def test_a_symlink_that_points_to_itself_does_not_make_the_app_recreate_merged_authors(
             self, db, shelf, authors):
         shelf.add_with_report("世界文化小史", author="Ｈ・Ｇ・ウェルズ")
-        wells = write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ]\n---\n")
+        wells = write_note(authors, "Wells.md", "---\naliases: [H・G・ウェルズ]\n---\n")
         os.symlink("loop.md", authors / "loop.md")
 
         rebuild(db)
         rebuild(db)
 
-        assert note_names_in(authors) == ["ウェルズ.md"]
+        assert note_names_in(authors) == ["Wells.md"]
         # 見えるノートは書き直し、ハブにも載る
         assert "世界文化小史" in read(wells)
-        assert "- [ウェルズ](ウェルズ.md) — 1冊（レポート 1）" in read(authors / HUB_NAME)
+        assert "- [Wells](Wells.md) — 1冊（レポート 1）" in read(authors / HUB_NAME)
 
     def test_a_dangling_symlink_is_not_a_note(self, authors):
         os.symlink("missing.md", authors / "dangling.md")
@@ -816,7 +986,7 @@ class TestAuthorNote:
         rebuild(db)
 
         text = read(note)
-        assert "集める名前: H.G. Wells、H・G・ウェルズ -->" in text
+        assert "集める名前: H.G. Wells、ウェルズ -->" in text
         assert "- タイムマシン — H.G. Wells · 積読" in text
         assert "- 透明人間 — H・G・ウェルズ · 積読" in text
         assert "関係ない本" not in text
@@ -974,7 +1144,8 @@ class TestHub:
         # 冊数の多い順、同数ならファイル名の順
         assert [l for l in notes_part.splitlines() if l.startswith("- ")] == [
             "- [渡辺照宏](渡辺照宏.md) — 2冊（レポート 1）",
-            "- [ダニエル・L・エヴェレット](ダニエル・L・エヴェレット.md) — 1冊（レポート 1）",
+            "- [エヴェレット](エヴェレット.md) — 1冊（レポート 1）",
+            "- [ダニエル](ダニエル.md) — 1冊（レポート 1）",
             "- [松浦俊輔](松浦俊輔.md) — 1冊（レポート 1）",
         ]
         assert [l for l in no_note_part.splitlines() if l.startswith("- ")] == [
@@ -1111,12 +1282,29 @@ class TestPlanNewNotes:
     def test_既に集められている著者はalreadyに入る(self, db, shelf, authors):
         shelf.add("世界文化小史", author="Ｈ・Ｇ・ウェルズ")
         shelf.add("言語の起源", author="松浦俊輔")
-        write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ]\n---\n")
+        write_note(authors, "Wells.md", "---\naliases: [H・G・ウェルズ]\n---\n")
 
         plan = self.plan(db, authors, include_without_report=True)
 
-        assert [a.name for a in plan.already] == ["H・G・ウェルズ"]
+        assert [a.name for a in plan.already] == ["ウェルズ"]
         assert [p.author.name for p in plan.notes] == ["松浦俊輔"]
+
+    @pytest.mark.parametrize("old_name, first, second, already", [
+        ("ジャレド ダイアモンド", "ジャレド ダイアモンド", "ジャレド・ダイアモンド",
+         ["ジャレド", "ジャレド ダイアモンド", "ダイアモンド"]),
+        ("J.K.ローリング", "J.K.ローリング", "J・K・ローリング", ["J.K.ローリング", "ローリング"]),
+    ])
+    def test_旧い規則で同じ人だった表記揺れの著者もalreadyに入り計画に入らない(
+            self, db, shelf, authors, old_name, first, second, already):
+        shelf.add("先の本", author=first)
+        shelf.add("後の本", author=second)
+        write_note(authors, f"{old_name}.md", "---\ntype: author-note\n---\n")
+
+        plan = self.plan(db, authors, include_without_report=True)
+
+        assert plan.notes == []
+        assert plan.skipped == []
+        assert sorted(a.name for a in plan.already) == already
 
     @pytest.mark.parametrize("names, files, symlinks, author, reason", [
         (["★★★"], {}, [], "★★★", "ファイル名にできる文字が無い"),
@@ -1186,3 +1374,142 @@ class TestCreateAfterPlan:
 
         assert read(authors / "渡辺照宏.md") == "ユーザーが書いた本文\n"
         assert authors / "渡辺照宏.md" not in written
+
+
+class TestExistingNotesUnderTheSplitRules:
+    """0005: 旧い規則（`・` で分けない・出版社を著者にする）で作られたノートがある状態で、新しい規則へ移る。
+
+    ノートは改名・分割・削除せず、重複するノートも作らない。
+    """
+
+    @staticmethod
+    def old_note(name):
+        # 旧い規則でアプリが作ったノートの雛形（マーカーはまだ無い）
+        return f"---\ntype: author-note\n---\n\n# {name}\n"
+
+    def test_旧い規則で作った中黒入りの名前のノートが分けた名前の本を集めて重複ノートを作らない(
+            self, db, shelf, authors):
+        shelf.add_with_report("言語の起源", id=13, author="ダニエル・Ｌ・エヴェレット, 松浦俊輔")
+        everett = write_note(authors, "ダニエル・L・エヴェレット.md", self.old_note("ダニエル・L・エヴェレット"))
+        write_note(authors, "松浦俊輔.md", self.old_note("松浦俊輔"))
+
+        rebuild(db)
+
+        assert note_names_in(authors) == ["ダニエル・L・エヴェレット.md", "松浦俊輔.md"]
+        text = read(everett)
+        assert "集める名前: ダニエル、エヴェレット -->" in text
+        assert "- [言語の起源](../0013-言語の起源.md)" in text
+        assert "すべての著者にノートがあります。" in read(authors / HUB_NAME)
+        assert rebuild(db) == []   # 2回目は何も書かない
+
+    def test_出版社の名前のノートは本が無くなり消しても作り直されない(self, db, shelf, authors):
+        shelf.add_with_report("決定版 図説 旧約・新約聖書", author="学研プラス", publisher="学研プラス")
+        gakken = write_note(authors, "学研プラス.md", self.old_note("学研プラス"))
+
+        rebuild(db)
+
+        assert "この名前の本はまだありません（集める名前: 学研プラス）" in read(gakken)
+        assert "- [学研プラス](学研プラス.md) — 0冊（レポート 0）" in read(authors / HUB_NAME)
+
+        gakken.unlink()
+        rebuild(db)
+
+        assert note_names_in(authors) == []
+
+    def test_出版社の名前はハブのノートの無い著者に出ない(self, db, shelf, authors):
+        shelf.add("野草・山菜・きのこ図鑑", author="茸本朗, HS", publisher="HS")
+
+        rebuild(db)
+
+        no_note_part = read(authors / HUB_NAME).split("## ノートの無い著者")[1]
+        assert [l for l in no_note_part.splitlines() if l.startswith("- ")] == [
+            "- 茸本朗 — 1冊（レポート 0）"]
+
+    def test_イニシャルのノートは作らない(self, db, shelf, authors):
+        shelf.add_with_report("世界文化小史", author="Ｈ・Ｇ・ウェルズ")
+
+        rebuild(db)
+
+        assert note_names_in(authors) == ["ウェルズ.md"]
+
+    def test_中黒でつないだ2人の旧いノートは2人の本を集め消すと1人ずつのノートが作られる(
+            self, db, shelf, authors):
+        shelf.add("熊野純彦の本", author="熊野純彦")
+        shelf.add("大澤真幸の本", author="大澤真幸")
+        shelf.add_with_report("二人の本", author="熊野純彦・大澤真幸")
+        pair = write_note(authors, "熊野純彦・大澤真幸.md", self.old_note("熊野純彦・大澤真幸"))
+
+        rebuild(db)
+
+        assert note_names_in(authors) == ["熊野純彦・大澤真幸.md"]
+        text = read(pair)
+        assert all(title in text for title in ("熊野純彦の本", "大澤真幸の本", "二人の本"))
+
+        pair.unlink()
+        rebuild(db)
+
+        assert note_names_in(authors) == ["大澤真幸.md", "熊野純彦.md"]
+
+    def test_同じ名を持つ別人の本は同じノートに載る(self, db, shelf, authors):
+        # 名前を `・` で分けてよいという了承の帰結（0005 §5.7）。変わったら気づけるよう固定する
+        shelf.add("正義の話", author="マイケル・サンデル")
+        shelf.add_with_report("フラッシュ・ボーイズ", author="マイケル・ルイス")
+        sandel = write_note(authors, "マイケル・サンデル.md", self.old_note("マイケル・サンデル"))
+
+        rebuild(db)
+
+        text = read(sandel)
+        assert "正義の話" in text and "フラッシュ・ボーイズ" in text
+        assert note_names_in(authors) == ["マイケル・サンデル.md", "ルイス.md"]
+
+    @pytest.mark.parametrize("old_name, first, second", [
+        # 旧い規則では空白・`.`・`・` を除いたキーが同じ = 1人の著者で、1つのノートに載っていた
+        ("ジャレド ダイアモンド", "ジャレド ダイアモンド", "ジャレド・ダイアモンド"),
+        ("J.K.ローリング", "J.K.ローリング", "J・K・ローリング"),
+        ("J・K・ローリング", "J・K・ローリング", "J.K.ローリング"),
+        ("ダニエル・L・エヴェレット", "ダニエル・Ｌ・エヴェレット", "ダニエル・L.エヴェレット"),
+    ])
+    def test_旧い規則で同じ人だった表記揺れの本は旧いノートに集まり断片のノートを作らない(
+            self, db, shelf, authors, old_name, first, second):
+        shelf.add("先の本", id=1, author=first)
+        shelf.add_with_report("後の本", id=2, author=second)
+        note = write_note(authors, f"{old_name}.md", self.old_note(old_name))
+
+        rebuild(db)
+
+        assert note_names_in(authors) == [f"{old_name}.md"]
+        text = read(note)
+        assert "先の本" in text and "後の本" in text
+        assert "すべての著者にノートがあります。" in read(authors / HUB_NAME)
+        assert rebuild(db) == []   # 2回目は何も書かない
+
+    def test_役割の並びで書いた旧いノートは別の人の本を載せない(self, db, shelf, authors):
+        shelf.add("からすのパンやさん", id=1, author="かこさとし 作・絵")
+        shelf.add("きんぎょがにげた", id=2, author="五味太郎 作・絵")
+        kako = write_note(authors, "かこさとし 作・絵.md", self.old_note("かこさとし 作・絵"))
+        gomi = write_note(authors, "五味太郎 作・絵.md", self.old_note("五味太郎 作・絵"))
+
+        rebuild(db)
+
+        assert "からすのパンやさん" in read(kako) and "きんぎょがにげた" not in read(kako)
+        assert "きんぎょがにげた" in read(gomi) and "からすのパンやさん" not in read(gomi)
+        assert note_names_in(authors) == ["かこさとし 作・絵.md", "五味太郎 作・絵.md"]
+
+    def test_役割の並びの語は著者のノートにならない(self, db, shelf, authors):
+        shelf.add_with_report("からすのパンやさん", author="かこさとし 作・絵")
+        shelf.add_with_report("論語", author="中村元 訳・解説")
+
+        rebuild(db)
+
+        assert note_names_in(authors) == ["かこさとし.md", "中村元.md"]
+
+    def test_本が無いノートには出版社欄と同じ名前は著者にしないことを書く(self, db, shelf, authors):
+        # 自費出版で出版社欄が著者名と同じ人は著者から外れる。本が消えた理由がノートから分かるようにする
+        shelf.add_with_report("日本史の雑学", author="歴史雑記ヒストリカ", publisher="歴史雑記ヒストリカ")
+        note = write_note(authors, "歴史雑記ヒストリカ.md", "本文\n")
+
+        rebuild(db)
+
+        text = read(note)
+        assert "この名前の本はまだありません（集める名前: 歴史雑記ヒストリカ）" in text
+        assert "出版社欄と同じ名前は著者にしません" in text

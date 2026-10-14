@@ -87,8 +87,9 @@ def run(db_path, capsys):
     return _run
 
 
-def book(title, author=None, tags=(), status=BookStatus.UNREAD, report=False):
-    return dict(title=title, author=author, tags=list(tags), status=status, report=report)
+def book(title, author=None, tags=(), status=BookStatus.UNREAD, report=False, publisher=None):
+    return dict(title=title, author=author, tags=list(tags), status=status, report=report,
+                publisher=publisher)
 
 
 def make_db(path, books, unused_tags=()):
@@ -106,7 +107,8 @@ def make_db(path, books, unused_tags=()):
         for name in unused_tags:
             db.add(tags.setdefault(name, Tag(name=name)))
         for spec in books:
-            row = Book(title=spec["title"], author=spec["author"], status=spec["status"])
+            row = Book(title=spec["title"], author=spec["author"], publisher=spec["publisher"],
+                       status=spec["status"])
             if spec["status"] == BookStatus.FINISHED:
                 row.finished_on = date(2026, 9, 20)
             row.tags = [tags.setdefault(name, Tag(name=name)) for name in spec["tags"]]
@@ -300,7 +302,7 @@ class TestPreview:
         shown = listed(preview.out)
         assert shown["themes"] == names_in(themes) == {"C.md", "言語学.md", "歴史日本.md"}
         assert shown["authors"] == names_in(authors)
-        assert len(shown["authors"]) == 3
+        assert len(shown["authors"]) == 4
 
 
 class TestThemeNotes:
@@ -533,11 +535,54 @@ class TestAuthorNotes:
         run("--apply")
 
         assert names_in(authors) == {
-            "ダニエル・L・エヴェレット.md", "松浦俊輔.md", "J.カバットジン.md", "春木豊.md"}
+            "ダニエル.md", "エヴェレット.md", "松浦俊輔.md", "J.カバットジン.md", "春木豊.md"}
+
+    def test_出版社の名前の著者ノートは作らない(self, authors, run, db_path):
+        make_db(db_path, [
+            book("決定版 図説 旧約・新約聖書", author="学研プラス", publisher="学研プラス"),
+            book("野草・山菜・きのこ図鑑", author="茸本朗, HS", publisher="HS"),
+        ])
+
+        result = run("--apply")
+
+        assert result.code == 0
+        assert names_in(authors) == {"茸本朗.md"}
+        assert "著者 1 人" in result.out
+
+    def test_旧い規則の中黒入りのノートが集めている著者は作らない(self, authors, run, db_path):
+        make_db(db_path, [book("ピダハン", author="ダニエル・Ｌ・エヴェレット")])
+        write_note(authors, "ダニエル・L・エヴェレット.md",
+                   "---\ntype: author-note\n---\n\n# ダニエル・L・エヴェレット\n")
+        before = snapshot(authors)
+
+        result = run("--apply")
+
+        assert result.code == 0
+        assert "既にノートあり 2" in result.out and "作った 0" in result.out
+        assert snapshot(authors) == before
+
+    @pytest.mark.parametrize("old_name, first, second, already", [
+        # 旧い規則では1人の著者だった表記揺れ。いまは `ジャレド ダイアモンド` `ジャレド` `ダイアモンド` の3人に分かれる
+        ("ジャレド ダイアモンド", "ジャレド ダイアモンド", "ジャレド・ダイアモンド", 3),
+        ("J.K.ローリング", "J.K.ローリング", "J・K・ローリング", 2),
+    ])
+    def test_旧い規則で同じ人だった表記揺れの著者は旧いノートが集めているので作らない(
+            self, authors, run, db_path, old_name, first, second, already):
+        make_db(db_path, [book("先の本", author=first), book("後の本", author=second)])
+        write_note(authors, f"{old_name}.md", f"---\ntype: author-note\n---\n\n# {old_name}\n")
+        before = snapshot(authors)
+
+        preview = run()
+        applied = run("--apply")
+
+        assert preview.code == applied.code == 0
+        assert f"作る 0 / 既にノートあり {already} / 作らない 0" in preview.out
+        assert f"作った 0 / 作れなかった 0 / 既にノートあり {already} / 作らない 0" in applied.out
+        assert snapshot(authors) == before
 
     def test_aliasesで集められている著者のノートは作らない(self, authors, run, db_path):
         make_db(db_path, [book("世界文化小史", author="Ｈ・Ｇ・ウェルズ")])
-        write_note(authors, "ウェルズ.md", "---\naliases: [H・G・ウェルズ]\n---\n\n# ウェルズ\n")
+        write_note(authors, "Wells.md", "---\naliases: [H・G・ウェルズ]\n---\n\n# Wells\n")
         before = snapshot(authors)
 
         result = run("--apply")

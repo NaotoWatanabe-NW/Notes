@@ -6,13 +6,18 @@
 マーカー `<!-- notes:books:start --> … <!-- notes:books:end -->` の間だけ。部品（マーカーの
 差し替え・書き込み・本の行）は `theme_store` のものを共有する。
 
-- **著者の分け方**: `Book.author` を NFKC 正規化して（書式文字は落として）`,` `、` で分け、
-  末尾の役割表記（`／著` `／訳` `（編著）` `(著, 編集)` など）を変化が無くなるまで落とす。括弧の中の
-  区切りでは分けない。訳者も著者と同じに扱う（DB の著者欄に役割は無いことが多く、役割で分けると
-  同じ人が本によって入ったり外れたりするため）。照合は空白・`・` `.` `=` を除き casefold した
-  キーで行い、表記揺れを同じ人にまとめる。
+- **著者の分け方**: `Book.author` を NFKC 正規化して（書式文字は落として）`,` `、` `・` で分け
+  （名前の一部の `・` でも分ける。`ダニエル・L・エヴェレット` → `ダニエル` と `エヴェレット`）、
+  末尾の役割表記（`／著` `／訳` `（編著）` `(著, 編集)` など）を変化が無くなるまで落とす。`作・絵` のように
+  `・` でつないだ役割の並びは、`・` で分ける前に丸ごと落とす。括弧（`()` `[]` `「」` `『』` `【】` `〈〉`
+  `《》`）の中の区切りでは分けない。英字1文字のイニシャル（`L` `L.`）は名前にしない。訳者も著者と同じに扱う
+  （DB の著者欄に役割は無いことが多く、役割で分けると同じ人が本によって入ったり外れたりするため）。
+  照合は空白・`・` `.` `=` を除き casefold したキーで行い、表記揺れを同じ人にまとめる。
+  どれかの本の出版社欄と同じ名前は著者にしない（`collect_authors` だけ。ノートの名前には効かせない）。
 - **ノートが集める名前**: ファイル名（stem）と frontmatter の `aliases`。別の文字種の表記
   （`H.G. Wells` と `H・G・ウェルズ`）は `aliases` でユーザーが1つにまとめる。
+  旧い規則（`,` `、` だけで分ける）で作ったノートは、`・` で分ける前のまとまりのキーでも本を集める
+  （`expand_notes`。`ジャレド ダイアモンド.md` に `ジャレド・ダイアモンド` の本も載り、断片のノートは作らない）。
 - **ノートを作るのは、レポートが1冊以上ある著者に限り、どのノートも集めていないときだけアプリ**。
   それ以外の著者はハブ `authors/著者一覧.md` に冊数付きの文字で出す。ユーザーが作ったノートは
   レポートの有無に関係なく埋める。アプリはノートを改名も削除もしない（消されたノートは、
@@ -27,7 +32,7 @@
   触らない、といった書き込みの規則は `theme_store` と同じ（`update_file` / `fill_block`）。
 
 更新は `ThemeWatcher` が `theme_store.rebuild` の次に `rebuild()` を呼んで行う。
-設計: docs/design/0002-author-notes.md
+設計: docs/design/0002-author-notes.md、著者の分け方は docs/design/0005-author-split-rules.md
 """
 
 import logging
@@ -35,7 +40,7 @@ import os
 import re
 import time
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional
 
@@ -53,7 +58,13 @@ HUB_NAME = "著者一覧.md"
 NOTE_TYPE = "author-note"
 HUB_TYPE = "author-hub"
 
-_SEPARATOR_CHARS = ",、"                      # NFKC のあとに使う（，→ , と ､ → 、は NFKC が揃える）
+# 区切り。NFKC のあとに使う（，→ ,、､ → 、、･ → ・ は NFKC が揃える）。· (U+00B7) と = は区切りにしない
+_CLUSTER_SEPARATORS = ",、"   # 旧い規則（0002）の区切り。これで分けたまとまりが、旧い規則での1人分
+_NAME_SEPARATOR = "・"        # 0005 で足した区切り。まとまりをさらに名前に分ける
+_SEPARATOR_CHARS = _CLUSTER_SEPARATORS + _NAME_SEPARATOR
+# 対になる括弧。中の区切りでは分けない（団体名の「」の中の `・` など）。役割表記の括弧は `(` `[` だけ
+_OPEN_BRACKETS = "([「『【〈《"
+_CLOSE_BRACKETS = ")]」』】〉》"
 _ROLES_ANY = (
     "編著|共著|著者|訳者|編者|監修|監訳|翻訳|原作|解説|"
     "編集|編纂|編訳|校注|校閲|校訂|原著|原案|原画|序文|構成|企画|協力|脚本|漫画|作画|挿絵|"
@@ -65,12 +76,17 @@ _ROLES_ANY = (
 _ROLES_SPACED = "編著|共著|著者|訳者|編者|監修|監訳|翻訳|著|訳|編"
 # 括弧の中が役割だけ（`著`、`著, 編集`）のとき。1つでも役割でない語が混ざれば落とさない
 _ROLE_LIST = rf"(?:{_ROLES_ANY})(?:\s*[{_SEPARATOR_CHARS}]\s*(?:{_ROLES_ANY}))*"
+# `・` でつないだ役割の並び（`作・絵`、`訳・解説`）は、`・` で分ける前に落とす。分けると `絵` `解説` が
+# 名前の断片として残り、別の人どうしをつなぐ「著者」になる
+_ROLE_JOINED = rf"\s*{_NAME_SEPARATOR}\s*(?:{_ROLES_ANY})"
 _ROLE_SUFFIX = re.compile(
-    rf"(?:\s*/\s*(?:{_ROLES_ANY})"             # 「／著」「/訳」
-    rf"|\s*[(\[]\s*{_ROLE_LIST}\s*[)\]]"       # 「（編著）」「[著]」「(著, 編集)」（NFKC で全角括弧も半角になる）
-    rf"|\s+(?:{_ROLES_SPACED}))\s*$"           # 「 編」「 訳」（空白区切りは紛れない役割だけ）
+    rf"(?:\s*/\s*(?:{_ROLES_ANY})(?:{_ROLE_JOINED})*"   # 「／著」「/訳」「／作・絵」
+    rf"|\s*[(\[]\s*{_ROLE_LIST}\s*[)\]]"              # 「（編著）」「[著]」「(著, 編集)」（NFKC で全角括弧も半角になる）
+    rf"|\s+(?:{_ROLES_ANY})(?:{_ROLE_JOINED})+"          # 「 作・絵」「 訳・解説」（空白のあとが役割2つ以上の並び）
+    rf"|\s+(?:{_ROLES_SPACED}))\s*$"                   # 「 編」「 訳」（空白区切りは紛れない役割だけ）
 )
 _SPACES = re.compile(r"\s+")
+_INITIAL_KEY = re.compile(r"[a-z]")           # 照合キーが英字1文字の名前（L、L.、Ｌ）はイニシャル。名前にしない
 _KEY_DROP = re.compile(r"[\s・.=·]")          # 照合キーで無視する文字
 _UNSAFE_NAME = re.compile(r'[\\/:*?"<>|#^\[\]\x00-\x1f\x7f]')   # ファイル名・Obsidian のリンクで困る文字
 _STEM_BYTES = 200                              # ファイル名の上限（UTF-8 で 255 バイト未満に収める）
@@ -118,22 +134,25 @@ def author_key(name: str) -> str:
 
     出典ごとの表記揺れ（全角半角・空白・カナ表記の区切り・大文字小文字）を同じ人にまとめる。
     macOS の Obsidian が付ける NFD のファイル名も、NFKC で NFC に揃うので同じキーになる。
+    `・` を除くのは、`・` を含む出版社名（`ディスカヴァー・トゥエンティワン`）のキーを、`・` で分けた
+    名前のキーをつないだものと同じにするため（0005）。
     """
     return _KEY_DROP.sub("", _normalize(name)).casefold()
 
 
-def _split_outside_brackets(text: str) -> list[str]:
-    """`,` `、` で分ける。対になった括弧 `(…)` `[…]` の中の区切りでは分けない。
+def _split_outside_brackets(text: str, separators: str = _SEPARATOR_CHARS) -> list[str]:
+    """`separators` の文字で分ける。対になった括弧 `(…)` `[…]` `「…」` などの中の区切りでは分けない。
 
     `山田太郎 (著, 編集), 鈴木花子 (翻訳)` を括弧の中でも切ると、`山田太郎 (著` と `編集)` に
-    なってしまう。閉じていない括弧は無視する（開き括弧が残りの著者を飲み込まないように）。
+    なってしまう。`NHK「ヒューマン・ドキュメント」取材班` の `・` も同じ。
+    閉じていない括弧は無視する（開き括弧が残りの著者を飲み込まないように）。
     """
     opened: list[int] = []
     delta = [0] * (len(text) + 1)   # 位置ごとの括弧の深さの増減（入れ子が深くても1回の走査で済む）
     for i, ch in enumerate(text):
-        if ch in "([":
+        if ch in _OPEN_BRACKETS:
             opened.append(i)
-        elif ch in ")]" and opened:
+        elif ch in _CLOSE_BRACKETS and opened:
             delta[opened.pop()] += 1
             delta[i + 1] -= 1
     parts: list[str] = []
@@ -141,7 +160,7 @@ def _split_outside_brackets(text: str) -> list[str]:
     begin = 0
     for i, ch in enumerate(text):
         depth += delta[i]
-        if depth == 0 and ch in _SEPARATOR_CHARS:
+        if depth == 0 and ch in separators:
             parts.append(text[begin:i])
             begin = i + 1
     parts.append(text[begin:])
@@ -161,24 +180,52 @@ def _strip_roles(name: str) -> str:
         name = stripped
 
 
-def split_authors(author: Optional[str]) -> list[str]:
-    """著者欄を人ごとの表示名に分ける。キーで重複を除き、出てきた順に返す。
+def _fragments(author: Optional[str]) -> list[tuple[str, str]]:
+    """著者欄を (名前, その名前が出たまとまりの照合キー) に分ける。名前の重複は除かない。
 
-    書式文字を除去 → NFKC → 括弧の外の `,` `、` で分割 → 空白を1つに詰めて strip
-    → 末尾の役割表記を繰り返し落とす。キーが空になるもの（空文字・役割だけ）は捨てる。
-    結果の各名前をもう一度この関数に通しても変わらない（ノートの stem や aliases に使えるように）。
+    まとまりは、旧い規則（0002）が1人としていた単位: 括弧の外の `,` `、` で分け、役割表記を落とした文字列。
+    旧い規則で作ったノート（`ジャレド ダイアモンド.md`）は、このキーでも本を集める（`expand_notes`）。
+    まとまりごとに先に役割表記を落とすのは、`作・絵` のような `・` でつないだ役割の並びを、`・` で
+    分ける前に丸ごと落とすため。名前はまとまりを括弧の外の `・` で分け、役割表記を落とし、
+    キーが空の名前とイニシャルを捨てたもの。
     """
     if not author:
         return []
+    fragments: list[tuple[str, str]] = []
+    for cluster in _split_outside_brackets(_normalize(author), _CLUSTER_SEPARATORS):
+        cluster = _strip_roles(_SPACES.sub(" ", cluster).strip())
+        cluster_key = author_key(cluster)
+        for part in _split_outside_brackets(cluster, _NAME_SEPARATOR):
+            name = _strip_roles(_SPACES.sub(" ", part).strip())
+            key = author_key(name)
+            if key and not _INITIAL_KEY.fullmatch(key):
+                fragments.append((name, cluster_key))
+    return fragments
+
+
+def _unique_names(fragments: list[tuple[str, str]]) -> list[str]:
+    """名前をキーで重複を除き、出てきた順に返す。"""
     names: list[str] = []
     seen: set[str] = set()
-    for part in _split_outside_brackets(_normalize(author)):
-        name = _strip_roles(_SPACES.sub(" ", part).strip())
+    for name, _ in fragments:
         key = author_key(name)
-        if key and key not in seen:
+        if key not in seen:
             seen.add(key)
             names.append(name)
     return names
+
+
+def split_authors(author: Optional[str]) -> list[str]:
+    """著者欄を人ごとの表示名に分ける。キーで重複を除き、出てきた順に返す。
+
+    書式文字を除去 → NFKC → 括弧の外の `,` `、` で分割 → 空白を1つに詰めて strip → 末尾の役割表記を
+    繰り返し落とす（`作・絵` のような `・` でつないだ役割の並びも、ここで丸ごと落とす）→ 括弧の外の
+    `・` で分割 → 末尾の役割表記を落とす。キーが空になるもの（空文字・役割だけ）と、キーが英字1文字の
+    もの（`ダニエル・L・エヴェレット` の `L`。イニシャル）は捨てる。
+    名前の一部の `・` でも分ける（`ダニエル・L・エヴェレット` → `ダニエル`, `エヴェレット`。0005）。
+    結果の各名前をもう一度この関数に通しても変わらない（ノートの stem や aliases に使えるように）。
+    """
+    return _unique_names(_fragments(author))
 
 
 def note_stem(name: str) -> str:
@@ -203,21 +250,61 @@ class Author:
     key: str
     name: str                 # 表示名。そのキーを最初に持つ（id が最小の）本の表記
     books: tuple[Book, ...]   # id 順。同じ本は1回だけ
+    # この名前が出たまとまり（旧い規則で1人としていた単位。`_fragments`）の照合キー。旧い規則で作った
+    # ノートが、`・` で分ける前のキーで本を集めるのに使う（`expand_notes`）
+    legacy_keys: frozenset[str] = frozenset()
+
+
+def _publisher_keys(books: list[Book]) -> frozenset[str]:
+    """本の出版社欄（文字列全体）の照合キー。null・空・キーが空になるもの（空白だけ）は入れない。"""
+    return frozenset(key for key in (author_key(b.publisher) for b in books if b.publisher) if key)
+
+
+def _drop_publishers(names: list[str], publishers: frozenset[str]) -> list[str]:
+    """著者欄から分けた名前のうち、出版社の名前を落とす（出てきた順は保つ）。
+
+    隣り合う1つ以上の名前のキーをつないだものが出版社のキーと一致したら、その名前をまとめて落とす。
+    `ディスカヴァー・トゥエンティワン` は `・` で2つに分かれるが、つないだキーは出版社欄のキー
+    （author_key は `・` を除く）と同じになる。つないだ長さが出版社のキーの最長を超えたら打ち切る。
+    """
+    keys = [author_key(name) for name in names]
+    longest = max(map(len, publishers), default=0)
+    dropped: set[int] = set()
+    for begin in range(len(keys)):
+        joined = ""
+        for end in range(begin, len(keys)):
+            joined += keys[end]
+            if len(joined) > longest:
+                break
+            if joined in publishers:
+                dropped.update(range(begin, end + 1))
+    return [name for i, name in enumerate(names) if i not in dropped]
 
 
 def collect_authors(books: list[Book]) -> dict[str, Author]:
     """id 順に本を見て、`split_authors` の名前ごとに本を集める。キー → Author（出てきた順）。
 
-    著者欄が null・空・区切りだけの本は、どの著者にも入らない。
+    出版社の名前は著者にしない（`_drop_publishers`）。比べる出版社は、渡された本すべての出版社欄
+    （呼び出し側は本棚の全部の本を渡す。rebuild と scripts/create_notes.py はそうしている）。
+    著者欄が null・空・区切りだけ・捨てる名前（イニシャル・出版社）だけの本は、どの著者にも入らない。
     """
+    publishers = _publisher_keys(books)
     names: dict[str, str] = {}
     collected: dict[str, list[Book]] = {}
+    legacy: dict[str, set[str]] = {}
     for book in sorted(books, key=lambda b: b.id):
-        for name in split_authors(book.author):   # 1冊の中の同じ人はここで1つになっている
+        fragments = _fragments(book.author)
+        clusters: dict[str, set[str]] = {}
+        for name, cluster_key in fragments:
+            clusters.setdefault(author_key(name), set()).add(cluster_key)
+        # 1冊の中の同じ人は _unique_names で1つになっている
+        for name in _drop_publishers(_unique_names(fragments), publishers):
             key = author_key(name)
             names.setdefault(key, name)
             collected.setdefault(key, []).append(book)
-    return {key: Author(key, names[key], tuple(found)) for key, found in collected.items()}
+            legacy.setdefault(key, set()).update(clusters[key])
+    return {key: Author(key, names[key], tuple(found), frozenset(legacy[key]))
+            for key, found in collected.items()}
 
 
 # ── ノート側: ノートが集める名前 ────────────────────────────
@@ -228,14 +315,15 @@ class AuthorNote:
     names: tuple[str, ...]     # stem が先頭、続いて aliases。キーで重複を除いた順
     keys: frozenset[str]       # names の author_key
     mtime: Optional[float] = None   # 読んだときの更新時刻。scan_notes が読んだノートだけ入る
+    # stem と aliases の、旧い規則でのまとまり（`_fragments`）の照合キー。`expand_notes` が使う
+    legacy_keys: frozenset[str] = frozenset()
 
 
-def note_names(meta: dict, stem: str) -> tuple[str, ...]:
-    """stem と frontmatter の `aliases` を、著者欄と同じ規則（`split_authors`）で名前にする。
+def _note_texts(meta: dict, stem: str) -> list[str]:
+    """ノートが名前として書いている文字列。stem が先頭、続いて frontmatter の `aliases`。
 
     aliases は文字列なら1つ、配列なら各要素（None は飛ばし、数値などは str にする）。
-    それ以外は無視する。文字列の中の `,` や `、` も区切りとして扱う（著者欄が同じ規則で
-    分かれるので、区切りを含む名前のままではどの著者とも一致しない）。
+    それ以外は無視する。
     """
     raw = meta.get("aliases")
     if isinstance(raw, str):
@@ -244,9 +332,18 @@ def note_names(meta: dict, stem: str) -> tuple[str, ...]:
         aliases = [str(item) for item in raw if item is not None]
     else:
         aliases = []
+    return [stem, *aliases]
+
+
+def note_names(meta: dict, stem: str) -> tuple[str, ...]:
+    """stem と frontmatter の `aliases` を、著者欄と同じ規則（`split_authors`）で名前にする。
+
+    文字列の中の `,` `、` `・` も区切りとして扱う（著者欄が同じ規則で分かれるので、区切りを含む
+    名前のままではどの著者とも一致しない）。
+    """
     names: list[str] = []
     seen: set[str] = set()
-    for item in [stem, *aliases]:
+    for item in _note_texts(meta, stem):
         for name in split_authors(item):
             key = author_key(name)
             if key not in seen:
@@ -257,7 +354,29 @@ def note_names(meta: dict, stem: str) -> tuple[str, ...]:
 
 def _note_of(path: Path, meta: dict, mtime: Optional[float] = None) -> AuthorNote:
     names = note_names(meta, path.stem)
-    return AuthorNote(path, names, frozenset(author_key(name) for name in names), mtime)
+    legacy = frozenset(cluster_key for text in _note_texts(meta, path.stem)
+                       for _, cluster_key in _fragments(text))
+    return AuthorNote(path, names, frozenset(author_key(name) for name in names), mtime, legacy)
+
+
+def expand_notes(notes: list[AuthorNote], authors: dict[str, Author]) -> list[AuthorNote]:
+    """旧い規則でのまとまりが同じ著者も、ノートが集める著者に足す（0005 の移行）。
+
+    旧い規則は空白・`・` `.` を除いたキーで、`ジャレド ダイアモンド` と `ジャレド・ダイアモンド` を
+    1人の著者にまとめ、ノートの名前は最初の本の表記だった。いまは `・` で分けるので、ノートの名前
+    （`ジャレド ダイアモンド`）と、もう一方の表記から出る名前（`ジャレド` `ダイアモンド`）が一致せず、
+    ノートから本が抜け、断片の著者ノートが作られてしまう。そこで、ノートの stem と aliases の旧い
+    まとまりのキーを持つ著者を、そのノートが集める著者（`keys`）に足す。`names`（「集める名前」の表示）は変えない。
+    """
+    by_legacy: dict[str, list[str]] = {}
+    for author in authors.values():
+        for legacy in author.legacy_keys:
+            by_legacy.setdefault(legacy, []).append(author.key)
+    expanded = []
+    for note in notes:
+        extra = {key for legacy in note.legacy_keys for key in by_legacy.get(legacy, ())}
+        expanded.append(replace(note, keys=note.keys | extra) if extra - note.keys else note)
+    return expanded
 
 
 @dataclass(frozen=True)
@@ -356,7 +475,8 @@ def author_block(note: AuthorNote, books: list[Book], reports: dict[int, Path],
                  themes: list[tuple[Path, set[int]]]) -> str:
     """著者ノートに差し込む一覧（マーカー込み）。themes は (テーマノートのパス, その本の id 集合)。"""
     start = note.path.parent
-    # 名前の区切りに `・` を使わないのは、カナの名前の中の `・` と見分けられないため
+    # 名前を `、` でつなぐのは、名前の中に括弧の外の `、` は残らない（`split_authors` が分ける）ので、
+    # つないでも名前の境目が曖昧にならないため
     lines = [
         "## この著者の本",
         "",
@@ -368,6 +488,7 @@ def author_block(note: AuthorNote, books: list[Book], reports: dict[int, Path],
         lines.append(
             f"この名前の本はまだありません（集める名前: {'、'.join(escape_text(n) for n in note.names)}）。"
             "集める名前はファイル名と frontmatter の `aliases` で決まります。"
+            "出版社欄と同じ名前は著者にしません。"
         )
     else:
         # 本の行の著者部分には DB の著者欄をそのまま出す（共著者・訳者・役割表記も見える）
@@ -453,6 +574,8 @@ def plan_new_notes(directory: Path, authors: dict[str, Author], notes: list[Auth
     True なら全部の著者（`scripts/create_notes.py` の一括作成）。レポートが無くて対象から外れた
     著者は、`skipped` にも入れない（ハブに文字で出るだけ）。
 
+    旧い規則でのまとまりが同じ著者も、既存のノートが集めているものとして扱う（`expand_notes`）。
+
     作る前に、次の3つを確かめる（満たさなければその著者は作らず、ハブに文字で出る）。
     - 作るノートが、次の回の `scan_notes` と同じ道（雛形を書いて frontmatter を読み、`note_names`）で
       その著者のキーを集める。集められないノートを作ると、毎回作り直しを試みる
@@ -465,6 +588,7 @@ def plan_new_notes(directory: Path, authors: dict[str, Author], notes: list[Auth
     計画した時点で、そのキーと名前を使用済みにする。書き込みに失敗したときは、後ろの重なる著者が
     その回は作られず、次の回に回る（安全側）。
     """
+    notes = expand_notes(notes, authors)
     covered = set().union(*(note.keys for note in notes))
     existing = {note.path.name for note in notes}
     planned: dict[str, Author] = {}              # この回に計画したファイル名 → 著者
@@ -539,7 +663,7 @@ def rebuild(db: Session, *, quiet_seconds: float = theme_store.QUIET_SECONDS,
     authors = collect_authors(books)
     scan = scan_notes(directory)   # ディレクトリを開けなければ例外（その回は何も書かない）
     _warn_lasting_doubts(scan.doubts)
-    notes = scan.notes
+    notes = expand_notes(scan.notes, authors)
     # テーマの所属は、著者ごとに books_for を呼び直さないよう1回だけ計算する
     themes = [(t.path, {b.id for b in theme_store.books_for(t.tags, books)})
               for t in theme_store.scan_notes(theme_store.themes_dir())]
