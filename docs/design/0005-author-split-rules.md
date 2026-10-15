@@ -7,6 +7,7 @@
 - 関連: [0002 著者ノート](0002-author-notes.md) §3 決定2（著者の分け方。**この設計書で変える**）・§5.2〜5.5・§5.12・§5.13、
   [0003 一括作成](0003-bulk-create-notes.md)（`scripts/create_notes.py`。呼び出しは変えない）、
   SPEC §4「著者ノート」、`backend/app/author_store.py`
+- 分け方は [0006](0006-katakana-split-and-publisher-notes.md) で変更（2026-10-15）
 
 ## 2. 背景と目的
 

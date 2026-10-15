@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from . import author_store, theme_store
+from . import author_store, publisher_store, theme_store
 from .database import Base, SessionLocal, add_missing_columns, engine
 from .routers import (
     books, lookup, notes, recommendations, reviews, settings, suggestions, tags, topics,
@@ -39,15 +39,19 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     # 既存のテーブルに後から足した列（create_all では反映されない）
     add_missing_columns(engine)
-    # テーマノート（reports/themes/）と著者ノート（reports/authors/）の一覧を数秒ごとに書き直す。
-    # NOTES_THEMES_WATCH=0 で両方止まる（一時的にファイルを触らせたくないとき）。
-    # NOTES_AUTHORS_WATCH=0 で著者ノートだけ止まる（ノートの自動作成を止めたいとき）。
+    # テーマノート（reports/themes/）・著者ノート（reports/authors/）・出版社ノート（reports/publishers/）の
+    # 一覧を数秒ごとに書き直す。
+    # NOTES_THEMES_WATCH=0 で3つとも止まる（一時的にファイルを触らせたくないとき）。
+    # NOTES_AUTHORS_WATCH=0 で著者ノートだけ、NOTES_PUBLISHERS_WATCH=0 で出版社ノートだけ止まる
+    # （ノートの自動作成を止めたいとき）。
     # 0 のほか false / off / no でも止まる
     watcher = None
     if env_enabled("NOTES_THEMES_WATCH"):
         jobs = [theme_store.rebuild]
         if env_enabled("NOTES_AUTHORS_WATCH"):
             jobs.append(author_store.rebuild)
+        if env_enabled("NOTES_PUBLISHERS_WATCH"):
+            jobs.append(publisher_store.rebuild)
         watcher = theme_store.ThemeWatcher(SessionLocal, jobs=jobs)
         watcher.start()
     yield

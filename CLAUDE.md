@@ -60,6 +60,7 @@ Notes/
 │   │   ├── report_store.py     読書レポート（reports/<id>-<タイトル>.md）の読み書き・索引・ゴミ箱
 │   │   ├── theme_store.py      テーマノートとハブへの一覧の差し込み。ThemeWatcher（5秒ごと）
 │   │   ├── author_store.py     著者ノートとハブへの一覧の差し込み（部品は theme_store を使う）
+│   │   ├── publisher_store.py  出版社ノートとハブ（author_store の仕組みを種類違いで使う）
 │   │   ├── booklookup.py       ISBN・書名から本を探す（openBD / Google Books / 国会図書館）。検索結果の10分キャッシュ
 │   │   ├── isbn.py             ISBN の正規化と検査（ハイフン除去・10→13桁・Kindle の ASIN を判定）
 │   │   ├── covers.py           手で入れる表紙を 600×900 以内の JPEG に縮める
@@ -115,10 +116,11 @@ Notes/
     - 正の鍵は `book_id`。ファイル名は人が読むための飾りで、タイトルを直しても改名しない
     - 同じ `book_id` のファイルが複数あれば mtime が最新のものを使う。保存は主の1つにだけ書き、他は上書き・削除しない
   - テーマノート: `reports/themes/*.md`（タグごと。**ユーザーが作る**。いまあるタグと本棚の著者のノートは `scripts/create_notes.py` で一括で作れる。0003）
-  - 著者ノート: `reports/authors/*.md`（レポートのある著者はアプリが自動で作る。ユーザーが手で作ってもよい。0002）。著者欄は `,` `、` `・` で分け、出版社の名前は著者にしない（0005）
+  - 著者ノート: `reports/authors/*.md`（レポートのある著者はアプリが自動で作る。ユーザーが手で作ってもよい。0002）。著者欄は `,` `、` で分け、`・` は両隣がカタカナか英字なら分けない。最後がカタカナの部分は出版社とみなす（0006）
   - ハブ `reports/authors/著者一覧.md`（アプリが作る。ノートの無い著者を冊数つきで並べる）
+  - 出版社ノート: `reports/publishers/*.md` とハブ `出版社一覧.md`（出版社欄と、著者欄から出版社とみなした名前。著者ノートと同じ仕組み。表記ゆれはまとめない。0006）
 - **ビュー（例外）**: テーマノート・著者ノート・ハブ（`reports/themes/テーマ一覧.md`・`reports/authors/著者一覧.md`）の `<!-- notes:books:start -->` 〜 `<!-- notes:books:end -->` の間は、DB から数秒ごとに作り直す一覧。アプリは読み戻さない。**手で編集しない**（マーカーの外は自由に書いてよい）
-- **一覧の更新**: アプリの起動中、`ThemeWatcher` が5秒ごとに書き直す（Obsidian でノートを作った・タグを書き換えたといった API を通らない変化も拾う）。止めるときは `NOTES_THEMES_WATCH=0`（テーマと著者の両方）か `NOTES_AUTHORS_WATCH=0`（著者ノートだけ）
+- **一覧の更新**: アプリの起動中、`ThemeWatcher` が5秒ごとに書き直す（Obsidian でノートを作った・タグを書き換えたといった API を通らない変化も拾う）。止めるときは `NOTES_THEMES_WATCH=0`（全部）、`NOTES_AUTHORS_WATCH=0`（著者ノートだけ）、`NOTES_PUBLISHERS_WATCH=0`（出版社ノートだけ）
 - リンクは Wikiリンク（`[[ ]]`）ではなく**相対 Markdown リンク**
 - 書き込み: `report_store.write_lock`（flock。`reports/.write.lock`）の中で `write_atomic`（tmp に書く → fsync → `os.replace`）。読み手はロックを取らない
 - 削除はファイルを消さず `reports/.trash/` へ移す

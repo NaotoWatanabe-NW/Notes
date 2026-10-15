@@ -67,6 +67,11 @@ def authors(reports):
 
 
 @pytest.fixture
+def publishers(reports):
+    return reports / "publishers"
+
+
+@pytest.fixture
 def db_path(tmp_path):
     return tmp_path / "reading.db"
 
@@ -164,13 +169,15 @@ def snapshot(directory):
 
 def listed(out):
     """標準出力の `+` の行を、セクションごとのファイル名の集合にする。"""
-    names: dict[str, set[str]] = {"themes": set(), "authors": set()}
+    names: dict[str, set[str]] = {"themes": set(), "authors": set(), "publishers": set()}
     section = None
     for line in out.splitlines():
         if line.startswith("テーマノート"):
             section = "themes"
         elif line.startswith("著者ノート"):
             section = "authors"
+        elif line.startswith("出版社ノート"):
+            section = "publishers"
         elif line.startswith("  + "):
             names[section].add(line[len("  + "):].split("（")[0])
     return names
@@ -302,7 +309,7 @@ class TestPreview:
         shown = listed(preview.out)
         assert shown["themes"] == names_in(themes) == {"C.md", "言語学.md", "歴史日本.md"}
         assert shown["authors"] == names_in(authors)
-        assert len(shown["authors"]) == 4
+        assert len(shown["authors"]) == 3
 
 
 class TestThemeNotes:
@@ -535,7 +542,7 @@ class TestAuthorNotes:
         run("--apply")
 
         assert names_in(authors) == {
-            "ダニエル.md", "エヴェレット.md", "松浦俊輔.md", "J.カバットジン.md", "春木豊.md"}
+            "ダニエル・L・エヴェレット.md", "松浦俊輔.md", "J.カバットジン.md", "春木豊.md"}
 
     def test_出版社の名前の著者ノートは作らない(self, authors, run, db_path):
         make_db(db_path, [
@@ -558,13 +565,13 @@ class TestAuthorNotes:
         result = run("--apply")
 
         assert result.code == 0
-        assert "既にノートあり 2" in result.out and "作った 0" in result.out
+        assert "既にノートあり 1" in result.out and "作った 0" in result.out
         assert snapshot(authors) == before
 
     @pytest.mark.parametrize("old_name, first, second, already", [
-        # 旧い規則では1人の著者だった表記揺れ。いまは `ジャレド ダイアモンド` `ジャレド` `ダイアモンド` の3人に分かれる
-        ("ジャレド ダイアモンド", "ジャレド ダイアモンド", "ジャレド・ダイアモンド", 3),
-        ("J.K.ローリング", "J.K.ローリング", "J・K・ローリング", 2),
+        # 旧い規則では1人の著者だった表記揺れ。0006 でも（カタカナ名の `・` は分けないので）キーが同じ1人
+        ("ジャレド ダイアモンド", "ジャレド ダイアモンド", "ジャレド・ダイアモンド", 1),
+        ("J.K.ローリング", "J.K.ローリング", "J・K・ローリング", 1),
     ])
     def test_旧い規則で同じ人だった表記揺れの著者は旧いノートが集めているので作らない(
             self, authors, run, db_path, old_name, first, second, already):
@@ -578,6 +585,18 @@ class TestAuthorNotes:
         assert preview.code == applied.code == 0
         assert f"作る 0 / 既にノートあり {already} / 作らない 0" in preview.out
         assert f"作った 0 / 作れなかった 0 / 既にノートあり {already} / 作らない 0" in applied.out
+        assert snapshot(authors) == before
+
+    def test_空白でつないだ旧いノートが集めている共著者は作らない(self, authors, run, db_path):
+        # 旧い規則ではまとまり全体が1人。そのノートはまとまりのキーで2人の本を集める
+        make_db(db_path, [book("二人の本", author="熊野純彦・大澤真幸")])
+        write_note(authors, "熊野純彦 大澤真幸.md", "---\ntype: author-note\n---\n\n# 熊野純彦 大澤真幸\n")
+        before = snapshot(authors)
+
+        result = run("--apply")
+
+        assert result.code == 0
+        assert "既にノートあり 2" in result.out and "作った 0" in result.out
         assert snapshot(authors) == before
 
     def test_aliasesで集められている著者のノートは作らない(self, authors, run, db_path):
@@ -648,6 +667,53 @@ class TestAuthorNotes:
         run("--apply")
 
         assert "- [地政学](../themes/地政学.md) — 共通の本 1冊" in read(authors / "曽村保信.md")
+
+
+class TestPublisherNotes:
+    def test_全部の出版社のノートをレポートの有無に関係なく作る(self, publishers, authors, run, db_path):
+        make_db(db_path, [book("旧約聖書", publisher="学研プラス"),
+                          book("野草図鑑", author="茸本朗", publisher="ハーベスト", report=True)])
+
+        result = run("--apply")
+
+        assert result.code == 0
+        assert names_in(publishers) == {"学研プラス.md", "ハーベスト.md"}
+        assert meta_of(publishers / "ハーベスト.md")["type"] == "publisher-note"
+        assert "出版社 2 社" in result.out
+        # 出版社の名前は著者のノートにならない
+        assert names_in(authors) == {"茸本朗.md"}
+
+    def test_下見は出版社ノートも何も書かず表示する(self, publishers, run, db_path):
+        make_db(db_path, [book("野草図鑑", author="茸本朗・ハーベスト")])
+
+        result = run()
+
+        assert listed(result.out)["publishers"] == {"ハーベスト.md"}
+        assert not publishers.exists()
+
+    def test_既存の出版社ノートがaliasesで集めている出版社は作らない(self, publishers, run, db_path):
+        make_db(db_path, [book("本1", publisher="学研プラス"), book("本2", publisher="株式会社学研プラス")])
+        write_note(publishers, "学研プラス.md", "---\naliases: [株式会社学研プラス]\n---\n")
+        before = snapshot(publishers)
+
+        result = run("--apply")
+
+        assert result.code == 0
+        assert snapshot(publishers) == before
+        assert "作った 0 / 作れなかった 0 / 既にノートあり 2 / 作らない 0" in result.out
+
+    def test_編集中の出版社ノートがあれば出版社ノートを作らず終了コード1になり著者ノートは作る(
+            self, publishers, authors, run, db_path):
+        make_db(db_path, [book("野草図鑑", author="茸本朗", publisher="ハーベスト"),
+                          book("旧約聖書", publisher="学研プラス")])
+        write_note(publishers, "学研プラス.md", "# 学研プラス\n", age=0)   # Obsidian で保存したばかり
+
+        result = run("--apply")
+
+        assert result.code == 1
+        assert "  ! 出版社ノートを作らない: 学研プラス.md: 直近に更新された" in result.err
+        assert names_in(publishers) == {"学研プラス.md"}
+        assert names_in(authors) == {"茸本朗.md"}
 
 
 class TestExistingFilesAndRepeatedRuns:
@@ -761,7 +827,7 @@ class TestExistingFilesAndRepeatedRuns:
         apply_again = run("--apply")
 
         assert again.code == 0 and apply_again.code == 0
-        assert again.out.count("作る 0 / 既にノートあり") == 2
+        assert again.out.count("作る 0 / 既にノートあり") == 3   # テーマ・著者・出版社
         assert "作った 0 / 作れなかった 0" in apply_again.out
         assert {"themes": snapshot(themes), "authors": snapshot(authors)} == created
 
@@ -843,7 +909,8 @@ class TestNonUtf8Names:
         applied = run("--apply")
 
         assert preview.code == applied.code == 0
-        assert listed(preview.out) == listed(applied.out) == {"themes": {"V.md"}, "authors": {"渡辺照宏.md"}}
+        assert listed(preview.out) == listed(applied.out) == {"themes": {"V.md"}, "authors": {"渡辺照宏.md"},
+                                                       "publishers": set()}
         assert "Traceback" not in applied.err
         # T を集めるノートを「関連するテーマ」に出す U と曽村保信は、理由つきで作らない
         assert "  ! U: 一覧に UTF-8 にできない文字が入る" in applied.err

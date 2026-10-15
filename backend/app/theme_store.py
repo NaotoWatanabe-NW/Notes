@@ -807,7 +807,7 @@ def _job_name(job: Callable) -> str:
 class ThemeWatcher:
     """ノートの一覧（ビュー）を作り直すジョブを数秒ごとに呼ぶスレッド。アプリの起動中だけ動かす。
 
-    ジョブは `(db) -> 書いたファイルのリスト` の関数（`rebuild` と `author_store.rebuild`）。
+    ジョブは `(db) -> 書いたファイルのリスト` の関数（`rebuild` と `author_store.rebuild` と `publisher_store.rebuild`）。
     1つのセッションで順に呼び、1つが失敗しても他は止めない。
     """
 

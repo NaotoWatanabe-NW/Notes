@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""いまあるタグと本棚の著者の、テーマノート・著者ノートを一括で作る1回限りのスクリプト
+"""いまあるタグと本棚の著者・出版社の、テーマノート・著者ノート・出版社ノートを一括で作る1回限りのスクリプト
 
-設計: docs/design/0003-bulk-create-notes.md
+設計: docs/design/0003-bulk-create-notes.md（出版社は docs/design/0006-katakana-split-and-publisher-notes.md）
 
 アプリの方針は、テーマノートはユーザーが作り、著者ノートはアプリが自動で作る（レポートのある
 著者だけ）。それは変えずに、いまあるタグ全部と本棚の著者全部のノートを、本文は空のまま
@@ -9,9 +9,10 @@
 
 - 対象: 1冊以上の本に付いているタグ全部 → `reports/themes/<タグ>.md`
         本棚の全部の本（積読も含む）の著者全部 → `reports/authors/<著者>.md`
-- **既存のファイルは上書きも変更もしない**。既にどれかのノートが集めているタグ・著者
-  （ファイル名か、テーマの `tags`・著者の `aliases` で）は作らない。ハブ（`テーマ一覧.md`・
-  `著者一覧.md`）と既存ノートの一覧もこのスクリプトは触らない。アプリが動いていれば、数秒おきに
+        本棚の全部の本の出版社全部 → `reports/publishers/<出版社>.md`
+- **既存のファイルは上書きも変更もしない**。既にどれかのノートが集めているタグ・著者・出版社
+  （ファイル名か、テーマの `tags`・著者と出版社の `aliases` で）は作らない。ハブ（`テーマ一覧.md`・
+  `著者一覧.md`・`出版社一覧.md`）と既存ノートの一覧もこのスクリプトは触らない。アプリが動いていれば、数秒おきに
   書き直す仕組み（ThemeWatcher）が十数秒で新しいノートを含む形に更新する。
 - DB は読み取り専用で開く（書かない・ファイルが無ければ作らない）。アプリが動いたままでも読める。
 - 何度流しても同じ結果になる。増えたタグ・著者のノートも、もう一度流せば作られる。
@@ -58,7 +59,7 @@ from sqlalchemy.orm import Session, selectinload
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from app import author_store, report_store, theme_store  # noqa: E402
+from app import author_store, publisher_store, report_store, theme_store  # noqa: E402
 from app.models import Book  # noqa: E402
 
 DEFAULT_DB = REPO_ROOT / "backend" / "reading.db"
@@ -69,7 +70,7 @@ WAIT_HINT = ("Obsidian で編集中なら閉じ、20秒ほどおいてもう一�
 
 @dataclass
 class _Result:
-    """1つのセクション（テーマ／著者）の結果。"""
+    """1つのセクション（テーマ／著者／出版社）の結果。"""
     made: int = 0                 # 作る予定（下見）／作った（--apply）数
     failed: int = 0               # 作れなかった数
     problem: bool = False         # 待った・フォルダを読めなかった（終了コード 1 の理由）
@@ -129,7 +130,7 @@ def _write_notes(directory: Path, planned: list, now: float, quiet: float) -> tu
 
 def _apply_plan(plan, directory: Path, skipped: list[tuple[str, str]], extra, apply: bool,
                 now: float, quiet: float) -> tuple[_Result, list]:
-    """計画を表示し、`--apply` なら作る。テーマと著者で共通の出力。(結果, 作った（下見では作る予定の）もの)。"""
+    """計画を表示し、`--apply` なら作る。テーマ・著者・出版社で共通の出力。(結果, 作った（下見では作る予定の）もの)。"""
     for name, reason in skipped:
         _warn(f"{name}: {reason}")
     if apply:
@@ -174,11 +175,13 @@ def _themes_section(books: list[Book], reports: dict[int, Path], apply: bool,
 
 
 def _authors_section(books: list[Book], reports: dict[int, Path], theme_notes: list,
-                     apply: bool, now: float, quiet: float) -> _Result:
-    directory = author_store.authors_dir()
-    print("著者ノート（authors/）")
+                     apply: bool, now: float, quiet: float,
+                     kind: author_store.NoteKind = author_store.AUTHOR) -> _Result:
+    """著者ノート（`kind` が出版社なら出版社ノート）のセクション。仕組みは同じ `plan_new_notes`。"""
+    directory = report_store.reports_dir() / kind.dirname
+    print(f"{kind.label}ノート（{kind.dirname}/）")
     try:
-        scan = author_store.scan_notes(directory)
+        scan = author_store.scan_notes(directory, kind)
     except FileNotFoundError:
         scan = author_store.NoteScan([], [])
     except OSError as error:
@@ -186,15 +189,15 @@ def _authors_section(books: list[Book], reports: dict[int, Path], theme_notes: l
         return _Result(problem=True)
     reason = scan.reason_to_wait(now, quiet)
     if reason is not None:
-        _warn(f"著者ノートを作らない: {reason}（{WAIT_HINT}）")
+        _warn(f"{kind.label}ノートを作らない: {reason}（{WAIT_HINT}）")
         print("  待ち（このセクションは作らない）")
         return _Result(problem=True)
 
-    authors = author_store.collect_authors(books)
+    authors = kind.collect(books)
     themes = [(note.path, {b.id for b in theme_store.books_for(note.tags, books)})
               for note in theme_notes]
     plan = author_store.plan_new_notes(directory, authors, scan.notes, reports, themes,
-                                       include_without_report=True)
+                                       include_without_report=True, kind=kind)
 
     def extra(item: author_store.PlannedNote) -> str:
         # ファイル名にすると名前が変わったときだけ、雛形に aliases を入れたことを示す
@@ -239,23 +242,27 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     tag_count = len({tag.name for book in books for tag in book.tags})
     author_count = len(author_store.collect_authors(books))
+    publisher_count = len(publisher_store.collect_publishers(books))
     print(f"DB（読み取り専用）: {db_path}")
     print(f"ノートの置き場所: {directory}")
-    print(f"本 {len(books)} 冊・タグ {tag_count} 個・著者 {author_count} 人\n")
+    print(f"本 {len(books)} 冊・タグ {tag_count} 個・著者 {author_count} 人・出版社 {publisher_count} 社\n")
 
     themes = _themes_section(books, reports, args.apply, now, quiet)
     print()
     authors = _authors_section(books, reports, themes.themes, args.apply, now, quiet)
     print()
+    publishers = _authors_section(books, reports, themes.themes, args.apply, now, quiet,
+                                  publisher_store.PUBLISHER)
+    print()
 
-    made = themes.made + authors.made
-    failed = themes.failed + authors.failed
+    made = themes.made + authors.made + publishers.made
+    failed = themes.failed + authors.failed + publishers.failed
     if args.apply:
         print(f"作った {made} / 作れなかった {failed}。"
               "アプリが動いていれば、ハブと既存ノートの一覧は十数秒で更新される。")
     else:
         print(f"下見のみ。--apply を付けると {made} 件を作る（既存のファイルは変えない）。")
-    return 1 if failed or themes.problem or authors.problem else 0
+    return 1 if failed or themes.problem or authors.problem or publishers.problem else 0
 
 
 if __name__ == "__main__":

@@ -68,3 +68,4 @@
 | [0003](0003-bulk-create-notes.md) | テーマノート・著者ノートの一括作成（`scripts/create_notes.py`） | 実装済み（2026-10-12） | 2026-10-12 |
 | [0004](0004-drop-unused-columns.md) | DB の不要な列を消す（`books.report_md`。`scripts/drop_unused_columns.py`） | 実装済み（2026-10-12） | 2026-10-12 |
 | [0005](0005-author-split-rules.md) | 著者の分け方の見直し（`・` で分ける・イニシャルと出版社の名前を著者にしない） | 実装済み（2026-10-14） | 2026-10-14 |
+| [0006](0006-katakana-split-and-publisher-notes.md) | カタカナ名の `・` を分けない・末尾のカタカナを出版社にする・出版社ノート（`reports/publishers/`） | 実装済み（2026-10-15） | 2026-10-15 |
